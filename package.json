@@ -1,0 +1,29 @@
+{
+  "name": "pi-surface",
+  "version": "0.1.0",
+  "description": "Interactive, reactive web surfaces connected to your running Pi session",
+  "type": "module",
+  "license": "MIT",
+  "keywords": ["pi-package"],
+  "files": ["src", "web", "skills", "README.md"],
+  "pi": { "extensions": ["./src/index.ts"], "skills": ["./skills"] },
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts",
+    "test:browser": "tsx test/browser.ts"
+  },
+  "dependencies": { "chokidar": "^3.6.0", "picomatch": "^4.0.3", "qrcode": "^1.5.4" },
+  "peerDependencies": { "@earendil-works/pi-coding-agent": "*", "@earendil-works/pi-ai": "*", "typebox": "*" },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.85.1",
+    "@earendil-works/pi-ai": "0.85.1",
+    "@types/node": "^24.0.0",
+    "@types/picomatch": "^4.0.0",
+    "@types/qrcode": "^1.5.5",
+    "playwright": "^1.55.0",
+    "tsx": "^4.20.0",
+    "typebox": "^1.0.0",
+    "typescript": "^5.9.2"
+  }
+}

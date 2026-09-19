@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#172b45">
+  <title>Pi Surface</title>
+  <link rel="stylesheet" href="./style.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="Pi Surface home"><svg class="pi-mark" viewBox="0 0 28 28" aria-hidden="true"><path d="M4 7h20M9 7v16M20 7v16h4"/></svg><span>surface</span></a>
+      <div class="session-heading"><strong id="session-name">Connecting to Pi</strong><span id="session-cwd" class="mono">Same session. Another view.</span></div>
+      <span id="connection" class="connection" role="status">Connecting</span>
+      <button id="activity-toggle" class="quiet mobile-toggle" aria-expanded="false" aria-controls="activity">Conversation</button>
+      <button id="controls-open" class="quiet" aria-haspopup="dialog">Session<span class="desktop-label"> controls</span></button>
+    </header>
+    <div id="notice" class="notice" role="alert" hidden><span id="notice-text"></span><button id="notice-dismiss" aria-label="Dismiss notification">Dismiss</button></div>
+    <div class="workbench">
+      <button id="drawer-backdrop" class="drawer-backdrop" aria-label="Close conversation" hidden></button>
+      <aside id="activity" class="activity" aria-label="Session conversation">
+        <div class="panel-heading"><h2>Conversation</h2><span id="activity-status" class="mono">Live session</span><button id="activity-close" class="mobile-toggle quiet" aria-label="Close conversation">Close</button></div>
+        <div id="messages" class="messages" role="log" aria-label="Conversation and tool activity" aria-live="off" tabindex="0"><p class="muted empty-conversation">Your conversation appears here, including activity from the terminal.</p></div>
+        <div class="activity-foot"><span id="model-label">No model connected</span><span id="context-label" class="mono"></span></div>
+      </aside>
+      <main class="workspace" aria-label="Surface workspace">
+        <nav class="surface-bar" aria-label="Open surfaces"><div id="surface-tabs" class="surface-tabs" role="tablist" aria-label="Surfaces"></div><span id="surface-count" class="surface-count mono">0 surfaces</span></nav>
+        <section id="surface-stage" class="surface-stage" aria-label="Active surface">
+          <div id="surface-empty" class="surface-empty">
+            <div class="empty-diagram" aria-hidden="true"><span class="diagram-tab">surface.html</span><div class="diagram-pane"><span>π</span><i></i><i></i><i></i></div></div>
+            <p class="eyebrow">Your working surface</p>
+            <h1>Give this session a view.</h1>
+            <p>Ask Pi to create a surface: a dashboard, a sketch, a form, or a tool for the task at hand. It opens here while your conversation stays connected.</p>
+            <button id="example-prompt" class="secondary">Draft a surface request <span aria-hidden="true">↗</span></button>
+            <p class="empty-note">Already have one? Ask Pi to open it with its surface tools.</p>
+          </div>
+          <div id="surface-loading" class="surface-loading" role="status" hidden>Loading surface…</div>
+          <!-- Intentionally unsandboxed: generated surfaces have the user's full, same-origin session trust. -->
+          <iframe id="surface-frame" title="Agent-generated surface" hidden></iframe>
+        </section>
+      </main>
+    </div>
+    <footer class="composer-wrap">
+      <form id="composer" class="composer">
+        <div id="drop-hint" class="drop-hint" hidden>Drop files to attach to your next message</div>
+        <div id="attachments" class="attachments" aria-label="Message attachments" aria-live="polite"></div>
+        <label class="sr-only" for="prompt">Message Pi</label>
+        <textarea id="prompt" rows="2" placeholder="Ask Pi to build, explore, or change something…" spellcheck="true"></textarea>
+        <div class="composer-actions">
+          <input id="file-input" type="file" multiple hidden>
+          <button id="attach" type="button" class="quiet" title="Attach files or paste an image">+ Attach</button>
+          <span id="composer-hint" class="composer-hint">Ctrl / ⌘ Enter to send</span>
+          <div class="send-actions">
+            <button id="abort" type="button" class="danger" title="Abort the current turn; queued follow-ups may still run" hidden>Abort</button>
+            <button id="actions-open" type="button" class="secondary" aria-haspopup="dialog" aria-controls="actions-dialog">Actions</button>
+            <button id="send" type="submit" class="primary">Send <span aria-hidden="true">↑</span></button>
+          </div>
+        </div>
+      </form>
+      <div class="composer-meta"><span id="session-status">Connecting to the running Pi session</span><span>Surface code has full session access</span></div>
+    </footer>
+  </div>
+  <dialog id="actions-dialog" class="controls-dialog actions-dialog" aria-labelledby="actions-title">
+    <div class="dialog-heading"><h2 id="actions-title">Run a command</h2><button id="actions-close" class="quiet" aria-label="Close actions">Close</button></div>
+    <form id="actions-form" class="actions-form">
+      <label for="actions-search">Search commands</label>
+      <input id="actions-search" type="search" placeholder="Name or description…" autocomplete="off" autofocus>
+      <label for="actions-select">Available commands</label>
+      <select id="actions-select" size="6" aria-describedby="actions-description"></select>
+      <p id="actions-description" class="help"></p>
+      <label for="actions-args">Arguments</label>
+      <input id="actions-args" placeholder="Arguments (optional)" autocomplete="off">
+      <p id="actions-notice" class="help" role="status" hidden></p>
+      <div class="actions-footer"><button id="actions-controls" type="button" class="secondary">Session controls</button><button id="actions-run" type="submit" class="primary">Run command</button></div>
+      <p class="help">Extension, skill, and prompt commands from this session. Pi dialogs still open in the terminal. For model, session, and other built-in controls, use Session controls.</p>
+    </form>
+  </dialog>
+  <dialog id="controls" class="controls-dialog" aria-labelledby="controls-title">
+    <div class="dialog-heading"><div><p class="eyebrow">Running Pi session</p><h2 id="controls-title">Session controls</h2></div><button id="controls-close" class="quiet" aria-label="Close session controls">Close</button></div>
+    <div id="control-notice" class="control-notice" role="status" hidden></div>
+    <div class="control-sections">
+      <section><h3>Identity</h3><form id="rename-form" class="inline-form"><label class="sr-only" for="rename-input">Session name</label><input id="rename-input" placeholder="Session name" required><button class="secondary">Rename</button></form></section>
+      <section><h3>Model &amp; reasoning</h3><div class="control-grid"><label>Model<select id="model-select"><option value="">Loading models…</option></select></label><label>Thinking<select id="thinking-select"><option value="off">Off</option><option value="minimal">Minimal</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="xhigh">Extra high</option><option value="max">Maximum</option></select></label></div></section>
+      <section><h3>Commands</h3><form id="command-form"><label class="sr-only" for="command-select">Available command</label><select id="command-select"><option value="">Choose a command</option></select><p id="command-description" class="help">Only commands exposed by this session are available.</p><div class="inline-form"><label class="sr-only" for="command-args">Command arguments</label><input id="command-args" placeholder="Arguments (optional)"><button id="command-run" class="secondary">Run</button></div></form></section>
+      <section><h3>Sessions</h3><p class="help">Starting or switching a session closes this server. Run <code>/surface</code> in the terminal for its new URL.</p><div class="button-row"><button id="sessions-load" class="secondary">Browse sessions</button><button id="session-new" class="secondary">New session</button></div><div id="session-list" class="selection-list"></div></section>
+      <section><h3>Conversation tree</h3><p class="help">Navigate to an entry or fork the conversation from it.</p><div id="tree-list" class="selection-list tree-list"></div></section>
+      <section><h3>Active tools</h3><form id="tools-form"><div id="tools-list" class="tools-list"></div><button id="tools-save" class="secondary">Apply tools</button></form></section>
+      <section><h3>Context</h3><form id="compact-form" class="inline-form"><label class="sr-only" for="compact-input">Compaction instructions</label><input id="compact-input" placeholder="Compaction instructions (optional)"><button class="secondary">Compact</button></form></section>
+    </div>
+  </dialog>
+</body>
+</html>

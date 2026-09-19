@@ -1,0 +1,5 @@
+node_modules/
+*.tgz
+artifacts/
+.env
+.pi/surface.json

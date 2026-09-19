@@ -1,0 +1,9 @@
+{
+  "description": "Demo data, not the real pi-surface test suite",
+  "tests": [
+    { "name": "Loopback authentication", "status": "passed", "duration": 12 },
+    { "name": "Same-session prompt delivery", "status": "passed", "duration": 8 },
+    { "name": "Surface data refresh", "status": "passed", "duration": 19 },
+    { "name": "Example failing test", "status": "failed", "duration": 31 }
+  ]
+}
