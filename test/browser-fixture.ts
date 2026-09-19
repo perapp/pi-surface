@@ -20,9 +20,9 @@ export async function browserFixture(host = '127.0.0.1', port = 0) {
     tree: [{ id: 'u1', parentId: null, type: 'message', role: 'user', text: 'user: Demo request' }], capabilities: { sessionControl: true },
   };
   let failNext = false;
-  const server = new SurfaceServer({ cwd: root, trusted: true, globalRoot: join(root, 'global'), host, port,
+  const server: SurfaceServer = new SurfaceServer({ cwd: root, trusted: true, globalRoot: join(root, 'global'), host, port,
     state: () => state,
-    invoke: (method, params) => {
+    invoke: (method, params): unknown => {
       if (failNext) { failNext = false; throw new Error('Simulated failure'); }
       calls.push({ method, params });
       if (['prompt', 'steer', 'followUp'].includes(method)) {
@@ -30,9 +30,15 @@ export async function browserFixture(host = '127.0.0.1', port = 0) {
         state.messages.push(message); server.publish({ type: 'message_end', message });
       }
       if (method === 'renameSession') state.session.name = String(params.name);
+      if (method === 'setModel') state.session.model = state.models.find(model => model.id === params.id && model.provider === params.provider) ?? state.session.model;
       if (method === 'setThinkingLevel') state.session.thinkingLevel = String(params.level);
       if (method === 'abort') state.session.idle = true;
       if (method === 'listSessions') return [{ id: 'saved', path: '/demo/saved.jsonl', name: 'Saved demo' }];
+      if (method === 'surfaceCommand') {
+        const info: Record<string, unknown> = { running: true, port: server.port, preferredUrl: server.urls[0], urls: server.urls,
+          ...(params.action === 'qr' ? { qrDataUrl: `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10"/></svg>')}` } : {}) };
+        return ['status', 'start', 'qr'].includes(String(params.action)) ? info : { accepted: true, note: `Surface ${params.action}` };
+      }
       server.publish({ type: 'state_changed' }); return { accepted: true };
     },
   });

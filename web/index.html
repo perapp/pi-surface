@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="color-scheme" content="light">
   <meta name="theme-color" content="#172b45">
+  <link id="favicon" rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M4 8h24M10 8v19M23 8v19h5' fill='none' stroke='%23bd3b48' stroke-width='4'/%3E%3C/svg%3E">
   <title>Pi Surface</title>
   <link rel="stylesheet" href="./style.css">
   <script type="module" src="./app.js"></script>
@@ -15,32 +16,22 @@
       <svg class="pi-mark" viewBox="0 0 28 28" aria-hidden="true"><path d="M4 7h20M9 7v16M20 7v16h4"/></svg>
       <span id="brand-name" hidden>surface</span>
     </button>
-    <button id="sidebar-backdrop" class="sidebar-backdrop" type="button" aria-label="Close sidebar" hidden></button>
-    <aside id="sidebar" class="sidebar" aria-label="Pi Surface sidebar" hidden>
-      <section class="session-heading" aria-label="Session information">
-        <strong id="session-name">Connecting to Pi</strong>
-        <span id="session-cwd" class="mono">Same session. Another view.</span>
-        <span id="connection" class="connection" role="status">Connecting</span>
-      </section>
-      <nav class="sidebar-controls" aria-label="Session and panels">
-        <button id="controls-open" class="sidebar-control" type="button" aria-haspopup="dialog">Session controls <span aria-hidden="true">↗</span></button>
-        <button id="prompt-toggle" class="sidebar-control panel-toggle" type="button" aria-pressed="false" aria-controls="prompt-panel">Prompt panel <span class="switch-track" aria-hidden="true"></span></button>
-        <button id="activity-toggle" class="sidebar-control panel-toggle" type="button" aria-pressed="false" aria-controls="activity">Conversation <span class="switch-track" aria-hidden="true"></span></button>
-      </nav>
-      <nav class="surface-nav" aria-label="Open surfaces">
-        <div class="sidebar-section-heading"><h2>Surfaces</h2><span id="surface-count" class="mono">0 surfaces</span></div>
-        <div id="surface-tabs" class="surface-tabs" role="tablist" aria-orientation="vertical" aria-label="Surfaces"></div>
-      </nav>
-      <p class="sidebar-note">The same Pi session.<br>A different view.</p>
+    <button id="prompt-quick-toggle" class="top-control prompt-quick-toggle" type="button" aria-label="Show prompt panel" aria-pressed="false" aria-controls="prompt-panel" title="Show prompt panel (Ctrl/⌘ /)">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5h14v11H9l-4 3v-14Z"/><path d="M8.5 9h7M8.5 12.5h4.5"/></svg>
+    </button>
+    <button id="controls-open" class="top-control controls-open" type="button" aria-label="Session controls" aria-haspopup="dialog" title="Session controls">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z"/><path d="M19.4 13.5a7.8 7.8 0 0 0 0-3l2-1.5-2-3.4-2.4 1a8 8 0 0 0-2.6-1.5L14 2.5h-4l-.4 2.6A8 8 0 0 0 7 6.6l-2.4-1-2 3.4 2 1.5a7.8 7.8 0 0 0 0 3l-2 1.5 2 3.4 2.4-1a8 8 0 0 0 2.6 1.5l.4 2.6h4l.4-2.6a8 8 0 0 0 2.6-1.5l2.4 1 2-3.4-2-1.5Z"/></svg>
+    </button>
+    <button id="sidebar-backdrop" class="sidebar-backdrop" type="button" aria-label="Close conversation" hidden></button>
+    <aside id="sidebar" class="sidebar" aria-label="Session conversation" hidden>
+      <div class="panel-heading"><h2>Conversation</h2><span id="activity-status" class="mono">Live session</span><button id="activity-close" class="quiet" type="button" aria-label="Close conversation">Close</button></div>
+      <div id="messages" class="messages" role="log" aria-label="Conversation and tool activity" aria-live="off" tabindex="0"><p class="muted empty-conversation">Your conversation appears here, including activity from the terminal.</p></div>
+      <div class="activity-foot"><span id="model-label">No model connected</span><span id="context-label" class="mono"></span></div>
+      <div id="sidebar-resizer" class="sidebar-resizer" role="separator" aria-label="Resize conversation panel" aria-orientation="vertical" aria-valuemin="260" aria-valuemax="720" tabindex="0"></div>
     </aside>
     <div id="main-shell" class="main-shell">
       <div id="notice" class="notice" role="alert" hidden><span id="notice-text"></span><button id="notice-dismiss" aria-label="Dismiss notification">Dismiss</button></div>
       <div class="workbench">
-        <aside id="activity" class="activity" aria-label="Session conversation" hidden>
-          <div class="panel-heading"><h2>Conversation</h2><span id="activity-status" class="mono">Live session</span><button id="activity-close" class="quiet" type="button" aria-label="Close conversation">Close</button></div>
-          <div id="messages" class="messages" role="log" aria-label="Conversation and tool activity" aria-live="off" tabindex="0"><p class="muted empty-conversation">Your conversation appears here, including activity from the terminal.</p></div>
-          <div class="activity-foot"><span id="model-label">No model connected</span><span id="context-label" class="mono"></span></div>
-        </aside>
         <main class="workspace" aria-label="Surface workspace">
         <section id="surface-stage" class="surface-stage" aria-label="Active surface">
           <div id="surface-empty" class="surface-empty">
@@ -62,11 +53,14 @@
         <div id="drop-hint" class="drop-hint" hidden>Drop files to attach to your next message</div>
         <div id="attachments" class="attachments" aria-label="Message attachments" aria-live="polite"></div>
         <label class="sr-only" for="prompt">Message Pi</label>
-        <textarea id="prompt" rows="2" placeholder="Ask Pi to build, explore, or change something…" spellcheck="true"></textarea>
+        <textarea id="prompt" rows="1" placeholder="Ask Pi to build, explore, or change something…" spellcheck="true" title="Enter to send · Shift+Enter or Ctrl+J for a new line"></textarea>
         <div class="composer-actions">
-          <input id="file-input" type="file" multiple hidden>
-          <button id="attach" type="button" class="quiet" title="Attach files or paste an image">+ Attach</button>
-          <span id="composer-hint" class="composer-hint">Ctrl / ⌘ Enter to send</span>
+          <div class="composer-controls">
+            <label class="sr-only" for="composer-model-select">Model</label><select id="composer-model-select" class="composer-select model-compact" title="Model"><option value="">Model</option></select>
+            <label class="sr-only" for="composer-thinking-select">Reasoning effort</label><select id="composer-thinking-select" class="composer-select thinking-compact" title="Reasoning effort"><option value="off">Off</option><option value="minimal">Minimal</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="xhigh">Extra high</option><option value="max">Maximum</option></select>
+            <input id="file-input" type="file" multiple hidden>
+            <button id="attach" type="button" class="quiet" title="Attach files or paste an image">+ Attach</button>
+          </div>
           <div class="send-actions">
             <button id="abort" type="button" class="danger" title="Abort the current turn; queued follow-ups may still run" hidden>Abort</button>
             <button id="actions-open" type="button" class="secondary" aria-haspopup="dialog" aria-controls="actions-dialog">Actions</button>
@@ -74,7 +68,6 @@
           </div>
         </div>
       </form>
-      <div class="composer-meta"><span id="session-status">Connecting to the running Pi session</span><span>Surface code has full session access</span></div>
     </footer>
     </div>
   </div>
@@ -94,9 +87,18 @@
     </form>
   </dialog>
   <dialog id="controls" class="controls-dialog" aria-labelledby="controls-title">
-    <div class="dialog-heading"><div><p class="eyebrow">Running Pi session</p><h2 id="controls-title">Session controls</h2></div><button id="controls-close" class="quiet" aria-label="Close session controls">Close</button></div>
+    <div class="dialog-heading"><div><p class="eyebrow">Running Pi session</p><h2 id="controls-title">Session controls</h2><p class="dialog-session"><strong id="session-name">Connecting to Pi</strong><span id="connection" class="connection" role="status">Connecting</span><span id="session-cwd" class="mono">Same session. Another view.</span></p></div><button id="controls-close" class="quiet" aria-label="Close session controls">Close</button></div>
     <div id="control-notice" class="control-notice" role="status" hidden></div>
     <div class="control-sections">
+      <section class="surface-connection"><div class="control-section-heading"><h3>Surface connection</h3><span id="surface-runtime-status" class="runtime-status">Loading…</span></div>
+        <p id="surface-url" class="connection-url mono">Loading connection details…</p>
+        <div class="button-row connection-actions"><button id="surface-copy" class="secondary" type="button">Copy URL</button><button id="surface-qr-toggle" class="secondary" type="button">Show QR</button><button id="surface-open-here" class="secondary" type="button">Open URL</button><button id="surface-refresh" class="secondary" type="button">Start / refresh</button></div>
+        <div id="surface-qr" class="surface-qr" hidden><img id="surface-qr-image" alt="Authenticated Pi Surface QR code"><p class="help">Anyone with this QR code can control this Pi session. Share only on a trusted network.</p></div>
+        <details class="connection-details"><summary>All connection addresses</summary><div id="surface-addresses" class="connection-addresses mono"></div></details>
+        <div class="button-row connection-admin"><button id="surface-open-host" class="secondary" type="button">Open on Pi host</button><button id="surface-hide-terminal" class="secondary" type="button">Clear terminal QR</button><button id="surface-stop" class="danger" type="button">Stop Surface</button></div>
+        <p class="help">Stopping closes this page. Restart from the Pi terminal with <code>/surface start</code>.</p>
+      </section>
+      <section><div class="control-section-heading"><h3>Surfaces</h3><span id="surface-count" class="mono">0 surfaces</span></div><div id="surface-tabs" class="surface-tabs" role="tablist" aria-label="Surfaces"></div></section>
       <section><h3>Identity</h3><form id="rename-form" class="inline-form"><label class="sr-only" for="rename-input">Session name</label><input id="rename-input" placeholder="Session name" required><button class="secondary">Rename</button></form></section>
       <section><h3>Model &amp; reasoning</h3><div class="control-grid"><label>Model<select id="model-select"><option value="">Loading models…</option></select></label><label>Thinking<select id="thinking-select"><option value="off">Off</option><option value="minimal">Minimal</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="xhigh">Extra high</option><option value="max">Maximum</option></select></label></div></section>
       <section><h3>Commands</h3><form id="command-form"><label class="sr-only" for="command-select">Available command</label><select id="command-select"><option value="">Choose a command</option></select><p id="command-description" class="help">Only commands exposed by this session are available.</p><div class="inline-form"><label class="sr-only" for="command-args">Command arguments</label><input id="command-args" placeholder="Arguments (optional)"><button id="command-run" class="secondary">Run</button></div></form></section>

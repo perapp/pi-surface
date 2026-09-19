@@ -9,6 +9,8 @@ let stream = null;
 let stopped = false;
 let sending = false;
 let actionRunning = false;
+let surfaceConnectionInfo = null;
+let surfaceQrVisible = false;
 let connected = false;
 let reconnectAttempts = 0;
 let reconnectTimer;
@@ -16,6 +18,7 @@ let refreshTimer;
 let frameTimer;
 let refreshSequence = 0;
 let activeMessageIndex = -1;
+let followConversation = true;
 const uploads = [];
 const reconnectHelp = 'Return to the Pi terminal, run /surface, and open the new URL. Your draft is still here.';
 
@@ -53,12 +56,32 @@ function showNotice(text, permanent = false) {
   ui['notice-text'].textContent = text;
   ui['notice-dismiss'].hidden = permanent;
 }
+let faviconStatus = '';
+let faviconTimer;
+function faviconUrl(color, opacity = 1) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M4 8h24M10 8v19M23 8v19h5" fill="none" stroke="${color}" stroke-width="4" stroke-linecap="square" opacity="${opacity}"/></svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+function updateFavicon(status) {
+  if (status === faviconStatus) return;
+  faviconStatus = status;
+  ui.favicon.dataset.status = status;
+  clearInterval(faviconTimer);
+  const color = status === 'offline' ? '#bd3b48' : '#365f8c';
+  ui.favicon.href = faviconUrl(color);
+  if (status === 'working') {
+    let bright = true;
+    faviconTimer = setInterval(() => { bright = !bright; ui.favicon.href = faviconUrl(color, bright ? 1 : .25); }, 650);
+  }
+}
 function updatePiMark() {
   const working = connected && state?.session?.idle === false;
   const status = !connected || stopped ? 'offline' : working ? 'working' : 'online';
   ui['sidebar-toggle'].dataset.status = status;
+  updateFavicon(status);
   const action = ui['sidebar-toggle'].getAttribute('aria-expanded') === 'true' ? 'Close' : 'Open';
-  ui['sidebar-toggle'].setAttribute('aria-label', `${action} sidebar — ${status === 'offline' ? 'disconnected' : status}`);
+  ui['sidebar-toggle'].setAttribute('aria-label', `${action} conversation — ${status === 'offline' ? 'disconnected' : status}`);
+  ui['sidebar-toggle'].title = `${action} conversation (Ctrl/⌘ B)`;
 }
 function connection(label, status) {
   ui.connection.textContent = label;
@@ -72,7 +95,6 @@ function closeConnection(reason) {
   clearTimeout(reconnectTimer);
   clearTimeout(refreshTimer);
   connection('Disconnected', 'closed');
-  ui['session-status'].textContent = 'Session connection closed';
   showNotice(`${reason} ${reconnectHelp}`, true);
   if (ui.controls.open) controlNotice(`${reason} ${reconnectHelp}`, true);
   if (ui['actions-dialog'].open) actionNotice(`${reason} ${reconnectHelp}`);
@@ -137,11 +159,16 @@ function renderSession() {
   ui['model-label'].textContent = session.model?.name || session.model?.id || 'No model selected';
   const usage = session.contextUsage;
   ui['context-label'].textContent = typeof usage?.percent === 'number' ? `${Math.round(usage.percent)}% context` : '';
-  const pending = session.pending;
-  const pendingCount = typeof pending === 'number' ? pending : Array.isArray(pending) ? pending.length : pending && typeof pending === 'object' ? Object.values(pending).reduce((sum, value) => sum + (Array.isArray(value) ? value.length : typeof value === 'number' ? value : 0), 0) : 0;
-  ui['session-status'].textContent = state.uiPrompt ? `Waiting in terminal: ${state.uiPrompt.title || state.uiPrompt.kind || 'Pi dialog'}` : `${session.idle === false ? 'Pi is working' : 'Connected to the running session'}${pendingCount ? ` · ${pendingCount} queued` : pending === true ? ' · Messages queued' : ''}`;
+  renderComposerControls();
   updatePiMark();
   updateComposer();
+}
+function renderComposerControls() {
+  const models = state?.models || [];
+  const session = state?.session || {};
+  const currentModel = models.findIndex(model => model.id === session.model?.id && model.provider === session.model?.provider);
+  setOptions(ui['composer-model-select'], models.map((model, index) => ({ value: String(index), label: model.name || model.id })), currentModel >= 0 ? String(currentModel) : '', 'Model');
+  if (document.activeElement !== ui['composer-thinking-select']) ui['composer-thinking-select'].value = session.thinkingLevel || 'off';
 }
 function renderMessage(message) {
   const article = element('article', 'message');
@@ -169,19 +196,21 @@ function renderMessage(message) {
   return article;
 }
 function nearBottom() { const el = ui.messages; return el.scrollHeight - el.scrollTop - el.clientHeight < 90; }
+function followConversationEnd() { if (followConversation) ui.messages.scrollTop = ui.messages.scrollHeight; }
+ui.messages.addEventListener('scroll', () => { followConversation = nearBottom(); }, { passive: true });
 function renderMessages() {
-  const follow = nearBottom();
+  const follow = followConversation;
   const fragment = document.createDocumentFragment();
   for (const message of state.messages) fragment.append(renderMessage(message));
   if (!state.messages.length) fragment.append(element('p', 'muted empty-conversation', 'Your conversation appears here, including activity from the terminal.'));
   ui.messages.replaceChildren(fragment);
   activeMessageIndex = -1;
-  if (follow) ui.messages.scrollTop = ui.messages.scrollHeight;
+  if (follow) followConversationEnd();
 }
 function handleMessage(event) {
   if (!state || !event.message) return;
   const message = event.message;
-  const follow = nearBottom();
+  const follow = followConversation;
   let index = state.messages.findIndex((item) => message.id ? item.id === message.id : message.timestamp != null && item.timestamp === message.timestamp && item.role === message.role);
   if (index < 0 && event.type !== 'message_start' && activeMessageIndex >= 0 && state.messages[activeMessageIndex]?.role === message.role) index = activeMessageIndex;
   if (index < 0 && event.type !== 'message_start') {
@@ -199,14 +228,18 @@ function handleMessage(event) {
     ui.messages.children[index]?.replaceWith(renderMessage(message));
   }
   activeMessageIndex = event.type === 'message_end' ? -1 : index;
-  if (follow) ui.messages.scrollTop = ui.messages.scrollHeight;
+  if (follow) followConversationEnd();
   if (event.type === 'message_end') queueRefresh();
 }
 function surfaceURL(surface) {
   const entry = String(surface.entry || 'index.html').split('/').map(encodeURIComponent).join('/');
   return `/surfaces/${encodeURIComponent(surface.id)}/${entry}`;
 }
-function selectSurface(id) { activeSurface = id; renderSurfaces(); }
+function selectSurface(id) {
+  activeSurface = id;
+  renderSurfaces();
+  if (ui.controls.open) ui.controls.close();
+}
 function renderSurfaces() {
   const surfaces = state.surfaces;
   if (!surfaces.some((surface) => surface.id === activeSurface)) activeSurface = (surfaces.find((surface) => surface.default) || surfaces[0])?.id || null;
@@ -323,7 +356,6 @@ function connect() {
 }
 function updateComposer() {
   const busy = state?.session?.idle === false;
-  ui['composer-hint'].textContent = busy ? 'Send steers the working Pi · Ctrl / ⌘ Enter' : 'Ctrl / ⌘ Enter to send';
   ui.send.title = busy ? 'Send steering guidance to the working Pi' : 'Send a new prompt';
   ui.send.disabled = !state || !connected || stopped || sending || uploads.some((upload) => upload.status !== 'ready');
   ui.send.textContent = sending ? 'Sending…' : 'Send ↑';
@@ -331,6 +363,8 @@ function updateComposer() {
   ui.abort.disabled = stopped || !connected;
   ui.attach.disabled = sending || stopped;
   ui['file-input'].disabled = sending || stopped;
+  ui['composer-model-select'].disabled = !state || !connected || stopped || busy;
+  ui['composer-thinking-select'].disabled = !state || !connected || stopped || busy;
   ui['actions-open'].disabled = !state || !connected || stopped;
   ui['actions-run'].disabled = actionRunning || !connected || stopped || !ui['actions-select'].value || state?.session?.idle === false || !!state?.session?.pending;
 }
@@ -414,14 +448,21 @@ ui.composer.addEventListener('submit', async (event) => {
     // Pi's steer delivery starts a normal user turn when idle and steers when busy.
     // Let Pi decide at delivery time, not from a potentially stale browser snapshot.
     await invoke('steer', { text, attachments: attached.map((upload) => upload.id), ...(activeSurface ? { surfaceId: activeSurface } : {}) });
-    if (ui.prompt.value === text) ui.prompt.value = '';
+    if (ui.prompt.value === text) { ui.prompt.value = ''; autoSizePrompt(); }
     for (const upload of attached) { const index = uploads.indexOf(upload); if (index >= 0) uploads.splice(index, 1); }
     queueRefresh();
   } catch (error) { showNotice(`Message not sent. ${error.message} Your draft and attachments were kept.`); }
   finally { sending = false; renderUploads(); ui.prompt.focus(); }
 });
 ui.prompt.addEventListener('keydown', (event) => {
-  if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !event.isComposing) { event.preventDefault(); ui.composer.requestSubmit(); }
+  if (event.isComposing) return;
+  if (event.ctrlKey && !event.metaKey && !event.altKey && event.key.toLocaleLowerCase() === 'j') {
+    event.preventDefault();
+    ui.prompt.setRangeText('\n', ui.prompt.selectionStart, ui.prompt.selectionEnd, 'end');
+    autoSizePrompt();
+    return;
+  }
+  if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); ui.composer.requestSubmit(); }
 });
 ui.abort.addEventListener('click', async () => { try { await invoke('abort'); queueRefresh(); } catch (error) { showNotice(error.message); } });
 ui['notice-dismiss'].addEventListener('click', () => { ui.notice.hidden = true; });
@@ -432,32 +473,106 @@ function toggleSidebar(open) {
   ui['brand-name'].hidden = !open;
   ui['sidebar-toggle'].setAttribute('aria-expanded', String(open));
   updatePiMark();
+  if (open) requestAnimationFrame(followConversationEnd);
 }
-function togglePanel(name, open, focus = true) {
-  const panel = name === 'conversation' ? ui.activity : ui['prompt-panel'];
-  const toggle = name === 'conversation' ? ui['activity-toggle'] : ui['prompt-toggle'];
-  panel.hidden = !open;
-  toggle.setAttribute('aria-pressed', String(open));
-  if (focus && open) (name === 'conversation' ? ui.messages : ui.prompt).focus();
+function togglePrompt(open, focus = true) {
+  ui['prompt-panel'].hidden = !open;
+  ui['prompt-quick-toggle'].setAttribute('aria-pressed', String(open));
+  const label = `${open ? 'Hide' : 'Show'} prompt panel`;
+  ui['prompt-quick-toggle'].setAttribute('aria-label', label);
+  ui['prompt-quick-toggle'].title = `${label} (Ctrl/⌘ /)`;
+  if (open) requestAnimationFrame(autoSizePrompt);
+  if (focus && open) ui.prompt.focus();
 }
 ui['example-prompt'].addEventListener('click', () => {
-  togglePanel('prompt', true, false);
+  togglePrompt(true, false);
   if (!ui.prompt.value) ui.prompt.value = 'Create and open an interactive surface for the task we are working on.';
   ui.prompt.focus();
 });
 ui['sidebar-toggle'].addEventListener('click', () => toggleSidebar(ui['sidebar-toggle'].getAttribute('aria-expanded') !== 'true'));
 ui['sidebar-backdrop'].addEventListener('click', () => toggleSidebar(false));
-ui['prompt-toggle'].addEventListener('click', () => {
-  togglePanel('prompt', ui['prompt-toggle'].getAttribute('aria-pressed') !== 'true');
-  if (matchMedia('(max-width: 760px)').matches) toggleSidebar(false);
+ui['prompt-quick-toggle'].addEventListener('click', () => {
+  togglePrompt(ui['prompt-quick-toggle'].getAttribute('aria-pressed') !== 'true');
 });
-ui['activity-toggle'].addEventListener('click', () => {
-  togglePanel('conversation', ui['activity-toggle'].getAttribute('aria-pressed') !== 'true');
-  if (matchMedia('(max-width: 760px)').matches) toggleSidebar(false);
+ui['activity-close'].addEventListener('click', () => toggleSidebar(false));
+
+const sidebarWidthKey = 'pi-surface-sidebar-width';
+function sidebarWidthBounds() {
+  return { min: 260, max: Math.max(260, Math.min(720, Math.floor(window.innerWidth * .65))) };
+}
+function setSidebarWidth(value, persist = false) {
+  const { min, max } = sidebarWidthBounds();
+  const width = Math.round(Math.max(min, Math.min(max, value)));
+  document.querySelector('.shell').style.setProperty('--sidebar-width', `${width}px`);
+  ui['sidebar-resizer'].setAttribute('aria-valuemin', String(min));
+  ui['sidebar-resizer'].setAttribute('aria-valuemax', String(max));
+  ui['sidebar-resizer'].setAttribute('aria-valuenow', String(width));
+  if (persist) try { localStorage.setItem(sidebarWidthKey, String(width)); } catch { /* Storage may be unavailable. */ }
+  return width;
+}
+let sidebarWidth = 340;
+try { sidebarWidth = Number(localStorage.getItem(sidebarWidthKey)) || sidebarWidth; } catch { /* Storage may be unavailable. */ }
+sidebarWidth = setSidebarWidth(sidebarWidth);
+let resizingSidebar = false;
+ui['sidebar-resizer'].addEventListener('pointerdown', event => {
+  if (matchMedia('(max-width: 760px)').matches) return;
+  resizingSidebar = true;
+  ui['sidebar-resizer'].setPointerCapture(event.pointerId);
+  document.querySelector('.shell').classList.add('resizing-sidebar');
+  event.preventDefault();
 });
-ui['activity-close'].addEventListener('click', () => togglePanel('conversation', false, false));
+ui['sidebar-resizer'].addEventListener('pointermove', event => {
+  if (!resizingSidebar) return;
+  sidebarWidth = setSidebarWidth(event.clientX);
+});
+function finishSidebarResize(event) {
+  if (!resizingSidebar) return;
+  resizingSidebar = false;
+  document.querySelector('.shell').classList.remove('resizing-sidebar');
+  if (event.pointerId != null && ui['sidebar-resizer'].hasPointerCapture(event.pointerId)) ui['sidebar-resizer'].releasePointerCapture(event.pointerId);
+  sidebarWidth = setSidebarWidth(sidebarWidth, true);
+}
+ui['sidebar-resizer'].addEventListener('pointerup', finishSidebarResize);
+ui['sidebar-resizer'].addEventListener('pointercancel', finishSidebarResize);
+ui['sidebar-resizer'].addEventListener('keydown', event => {
+  const step = event.shiftKey ? 40 : 10;
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+  event.preventDefault();
+  const bounds = sidebarWidthBounds();
+  sidebarWidth = setSidebarWidth(event.key === 'Home' ? bounds.min : event.key === 'End' ? bounds.max : sidebarWidth + (event.key === 'ArrowRight' ? step : -step), true);
+});
+window.addEventListener('resize', () => { sidebarWidth = setSidebarWidth(sidebarWidth); autoSizePrompt(); });
+
+function autoSizePrompt() {
+  const styles = getComputedStyle(ui.prompt);
+  const lineHeight = Number.parseFloat(styles.lineHeight) || 21;
+  const verticalPadding = Number.parseFloat(styles.paddingTop) + Number.parseFloat(styles.paddingBottom);
+  const minHeight = Math.ceil(lineHeight + verticalPadding);
+  const maxHeight = Math.ceil(lineHeight * 10 + verticalPadding);
+  ui.prompt.style.height = 'auto';
+  const height = Math.max(minHeight, Math.min(ui.prompt.scrollHeight, maxHeight));
+  ui.prompt.style.height = `${height}px`;
+  ui.prompt.style.overflowY = ui.prompt.scrollHeight > maxHeight ? 'auto' : 'hidden';
+}
+ui.prompt.addEventListener('input', autoSizePrompt);
+autoSizePrompt();
+
 document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape' && !ui.controls.open && ui['sidebar-toggle'].getAttribute('aria-expanded') === 'true') toggleSidebar(false);
+  const dialogOpen = ui.controls.open || ui['actions-dialog'].open;
+  if (event.key === 'Escape') {
+    if (dialogOpen) return; // Native dialog handling takes priority.
+    if (ui['sidebar-toggle'].getAttribute('aria-expanded') === 'true') { event.preventDefault(); toggleSidebar(false); return; }
+    if (!ui['prompt-panel'].hidden) { event.preventDefault(); togglePrompt(false, false); }
+    return;
+  }
+  if (dialogOpen || event.repeat || event.altKey || !(event.ctrlKey || event.metaKey)) return;
+  if (event.key.toLocaleLowerCase() === 'b') {
+    event.preventDefault();
+    toggleSidebar(ui['sidebar-toggle'].getAttribute('aria-expanded') !== 'true');
+  } else if (event.key === '/') {
+    event.preventDefault();
+    togglePrompt(ui['prompt-panel'].hidden);
+  }
 });
 
 // Composer command picker: use the same advertised commands and validated dispatch
@@ -490,7 +605,7 @@ ui['actions-close'].addEventListener('click', () => ui['actions-dialog'].close()
 ui['actions-search'].addEventListener('input', renderActions);
 ui['actions-select'].addEventListener('change', renderActionDescription);
 ui['actions-controls'].addEventListener('click', () => {
-  ui['actions-dialog'].close(); renderControls(); ui.controls.showModal();
+  ui['actions-dialog'].close(); renderControls(); ui.controls.showModal(); void loadSurfaceConnection();
 });
 ui['actions-form'].addEventListener('submit', async event => {
   event.preventDefault();
@@ -522,6 +637,39 @@ async function controlAction(button, method, params, success = 'Updated.') {
     return result;
   } catch (error) { controlNotice(error.message, true); return undefined; }
   finally { if (button) button.disabled = false; }
+}
+function renderSurfaceConnection() {
+  const info = surfaceConnectionInfo;
+  ui['surface-runtime-status'].textContent = info?.running ? `Running · :${info.port}` : 'Unavailable';
+  ui['surface-url'].textContent = info?.preferredUrl || 'Connection details unavailable';
+  ui['surface-addresses'].replaceChildren(...(info?.urls || []).map(url => element('p', '', url)));
+  ui['surface-qr'].hidden = !surfaceQrVisible || !info?.qrDataUrl;
+  if (info?.qrDataUrl) { ui['surface-qr-image'].src = info.qrDataUrl; ui['surface-qr-image'].alt = `Authenticated Pi Surface QR code for ${info.preferredUrl}`; }
+  ui['surface-qr-toggle'].textContent = surfaceQrVisible ? 'Hide QR' : 'Show QR';
+  for (const id of ['surface-copy', 'surface-open-here']) ui[id].disabled = !info?.preferredUrl;
+}
+async function loadSurfaceConnection(includeQr = false, button, action = includeQr ? 'qr' : 'status') {
+  if (button) button.disabled = true;
+  ui['surface-runtime-status'].textContent = 'Loading…';
+  try {
+    surfaceConnectionInfo = await invoke('surfaceCommand', { action });
+    if (includeQr) surfaceQrVisible = true;
+    renderSurfaceConnection();
+    return surfaceConnectionInfo;
+  } catch (error) { controlNotice(error.message, true); renderSurfaceConnection(); return undefined; }
+  finally { if (button) button.disabled = false; }
+}
+async function copyConnectionUrl() {
+  const value = surfaceConnectionInfo?.preferredUrl;
+  if (!value) return;
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error('Clipboard API unavailable');
+    await navigator.clipboard.writeText(value);
+  } catch {
+    const input = document.createElement('textarea'); input.value = value; input.style.position = 'fixed'; input.style.opacity = '0';
+    document.body.append(input); input.select(); document.execCommand('copy'); input.remove();
+  }
+  controlNotice('Authenticated Surface URL copied.');
 }
 function setOptions(select, options, current, placeholder) {
   if (document.activeElement === select) return;
@@ -572,14 +720,40 @@ function renderTree() {
   }));
   if (!tree.length) ui['tree-list'].append(element('p', 'help', 'No navigable entries yet.'));
 }
-ui['controls-open'].addEventListener('click', () => { renderControls(); ui.controls.showModal(); });
+ui['controls-open'].addEventListener('click', () => { renderControls(); ui.controls.showModal(); void loadSurfaceConnection(); });
 ui['controls-close'].addEventListener('click', () => ui.controls.close());
+ui['surface-refresh'].addEventListener('click', () => { void loadSurfaceConnection(false, ui['surface-refresh'], 'start'); });
+ui['surface-qr-toggle'].addEventListener('click', async () => {
+  if (surfaceQrVisible) { surfaceQrVisible = false; renderSurfaceConnection(); }
+  else await loadSurfaceConnection(true, ui['surface-qr-toggle']);
+});
+ui['surface-copy'].addEventListener('click', () => { void copyConnectionUrl(); });
+ui['surface-open-here'].addEventListener('click', () => { if (surfaceConnectionInfo?.preferredUrl) window.open(surfaceConnectionInfo.preferredUrl, '_blank', 'noopener,noreferrer'); });
+ui['surface-open-host'].addEventListener('click', () => { void controlAction(ui['surface-open-host'], 'surfaceCommand', { action: 'open' }, 'Browser requested on the Pi host.'); });
+ui['surface-hide-terminal'].addEventListener('click', () => { void controlAction(ui['surface-hide-terminal'], 'surfaceCommand', { action: 'hide' }, 'Terminal QR cleared.'); });
+ui['surface-stop'].addEventListener('click', () => {
+  if (confirm('Stop Pi Surface? This page will disconnect. Restart it from the terminal with /surface start.')) void controlAction(ui['surface-stop'], 'surfaceCommand', { action: 'stop' }, 'Pi Surface is stopping.');
+});
 ui['rename-form'].addEventListener('submit', (event) => { event.preventDefault(); void controlAction(event.submitter, 'renameSession', { name: ui['rename-input'].value.trim() }); });
 ui['model-select'].addEventListener('change', async () => {
   const model = state?.models?.[Number(ui['model-select'].value)];
   if (ui['model-select'].value && model) await controlAction(ui['model-select'], 'setModel', { provider: model.provider, id: model.id });
 });
 ui['thinking-select'].addEventListener('change', () => { void controlAction(ui['thinking-select'], 'setThinkingLevel', { level: ui['thinking-select'].value }); });
+ui['composer-model-select'].addEventListener('change', async () => {
+  const model = state?.models?.[Number(ui['composer-model-select'].value)];
+  if (!model) return;
+  ui['composer-model-select'].disabled = true;
+  try { await invoke('setModel', { provider: model.provider, id: model.id }); queueRefresh(); }
+  catch (error) { showNotice(`Model not changed. ${error.message}`); renderComposerControls(); }
+  finally { updateComposer(); }
+});
+ui['composer-thinking-select'].addEventListener('change', async () => {
+  ui['composer-thinking-select'].disabled = true;
+  try { await invoke('setThinkingLevel', { level: ui['composer-thinking-select'].value }); queueRefresh(); }
+  catch (error) { showNotice(`Reasoning effort not changed. ${error.message}`); renderComposerControls(); }
+  finally { updateComposer(); }
+});
 ui['command-select'].addEventListener('change', () => {
   ui['command-description'].textContent = state?.commands?.find((command) => command.name === ui['command-select'].value)?.description || 'Only commands exposed by this session are available.';
 });
@@ -612,7 +786,7 @@ ui['tools-form'].addEventListener('submit', (event) => {
   void controlAction(event.submitter, 'setActiveTools', { names });
 });
 ui['compact-form'].addEventListener('submit', (event) => { event.preventDefault(); void controlAction(event.submitter, 'compact', { instructions: ui['compact-input'].value }, 'Context compaction requested.'); });
-window.addEventListener('pagehide', () => { stream?.close(); clearTimeout(reconnectTimer); clearTimeout(refreshTimer); });
+window.addEventListener('pagehide', () => { stream?.close(); clearTimeout(reconnectTimer); clearTimeout(refreshTimer); clearInterval(faviconTimer); faviconStatus = ''; });
 window.addEventListener('pageshow', (event) => { if (event.persisted && !stopped) { void refresh().catch((error) => showNotice(error.message)); connect(); } });
 updateComposer();
 try { await refresh(); if (!stopped) connect(); }

@@ -104,6 +104,22 @@ test('adapter uses same session, native user messages, busy delivery, validation
   } finally { await f.cleanup(); }
 });
 
+test('browser settings expose authenticated surface status and QR controls', async () => {
+  const f = await fixture();
+  try {
+    const status = await f.invoke('surfaceCommand', { action: 'status' });
+    assert.equal(status.ok, true);
+    assert.equal(status.result.running, true);
+    assert.match(status.result.preferredUrl, /\?token=/);
+    assert.ok(status.result.urls.includes(status.result.preferredUrl));
+    const qr = await f.invoke('surfaceCommand', { action: 'qr' });
+    assert.match(qr.result.qrDataUrl, /^data:image\/svg\+xml;base64,/);
+    assert.equal((await f.invoke('surfaceCommand', { action: 'start' })).ok, true);
+    assert.equal((await f.invoke('surfaceCommand', { action: 'hide' })).ok, true);
+    assert.equal((await f.invoke('surfaceCommand', { action: 'invalid' })).status, 400);
+  } finally { await f.cleanup(); }
+});
+
 test('native images and file references reach the same user message', async () => {
   const f = await fixture();
   try {

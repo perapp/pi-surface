@@ -66,7 +66,7 @@ export default function surfaceExtension(pi: ExtensionAPI) {
         id: entry.id, parentId: entry.parentId, type: entry.type, label: sm.getLabel(entry.id), role: entry.type === 'message' ? entry.message.role : undefined,
         text: entry.type === 'message' ? `${entry.message.role}: ${messageText(entry.message).slice(0, 160)}` : entry.type,
       })),
-      capabilities: { sessionControl: true, terminalDialogs: true },
+      capabilities: { sessionControl: true, surfaceControl: true, terminalDialogs: true },
     };
   }
 
@@ -95,6 +95,26 @@ export default function surfaceExtension(pi: ExtensionAPI) {
         runtime().store.get(surfaceId);
         const action = text(params, 'action', 200);
         return invoke('followUp', { surfaceId, text: `Surface action:\n${JSON.stringify({ action, target: params.target, data: params.data })}` });
+      }
+      case 'surfaceCommand': {
+        const action = text(params, 'action', 20);
+        if (!['qr', 'open', 'status', 'hide', 'stop', 'start'].includes(action)) throw new HttpError(400, 'Unknown surface command');
+        if (action === 'hide') {
+          if (current.hasUI) current.ui.setWidget('pi-surface', undefined);
+          return { hidden: true, note: 'Terminal QR widget cleared.' };
+        }
+        if (action === 'open') {
+          const child = spawn(process.platform === 'darwin' ? 'open' : 'xdg-open', [preferredUrl()], { detached: true, stdio: 'ignore' });
+          child.on('error', error => server?.publish({ type: 'surface_error', message: `Could not open browser: ${error.message}` }));
+          child.unref();
+          return { ...(await connectionInfo(false)), note: 'Requested a browser on the Pi host.' };
+        }
+        if (action === 'stop') {
+          const timer = setTimeout(() => { void stop('stopped from browser settings'); }, 100);
+          timer.unref();
+          return { accepted: true, note: 'Pi Surface is stopping. Restart it with /surface start in the terminal.' };
+        }
+        return connectionInfo(action === 'qr');
       }
       case 'abort': current.abort(); return { accepted: true };
       case 'setModel': {
@@ -211,6 +231,17 @@ export default function surfaceExtension(pi: ExtensionAPI) {
   function preferredUrl() {
     const urls = runtime().urls;
     return urls.find(url => !['127.0.0.1', '[::1]', 'localhost'].includes(new URL(url).hostname)) ?? urls[0];
+  }
+
+  async function connectionInfo(includeQr: boolean) {
+    const running = runtime();
+    const url = preferredUrl();
+    const result: Record<string, unknown> = { running: true, port: running.port, preferredUrl: url, urls: running.urls };
+    if (includeQr) {
+      const svg = await QRCode.toString(url, { type: 'svg', errorCorrectionLevel: 'L', margin: 2, width: 320 });
+      result.qrDataUrl = `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+    }
+    return result;
   }
 
   async function announce(current: ExtensionContext, qr: boolean, allAddresses = false) {
