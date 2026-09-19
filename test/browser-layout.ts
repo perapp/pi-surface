@@ -49,6 +49,10 @@ export async function checkMobileLayout(browser: Browser, url: string) {
     const page = await context.newPage();
     await page.goto(url);
     await page.waitForFunction(() => document.querySelector('#connection')?.textContent === 'Live');
+    assert.equal(await page.locator('#prompt-panel').isHidden(), true);
+    await page.locator('#sidebar-toggle').click();
+    await page.locator('#prompt-toggle').click();
+    assert.equal(await page.locator('#sidebar').isHidden(), true, 'mobile panel toggle closes the sidebar');
     await assertComposerVisible(page, 0, 660);
     await page.locator('#prompt').fill('Keep the composer above the keyboard');
     await setVisibleViewport(page, 360);

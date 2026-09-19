@@ -14,6 +14,14 @@ try {
   await page.goto(fixture.server.urls[0]);
   await page.waitForFunction(() => document.querySelector('#connection')?.textContent === 'Live');
   assert.equal(new URL(page.url()).search, '');
+  assert.equal(await page.locator('#sidebar-toggle').getAttribute('data-status'), 'online');
+  assert.equal(await page.locator('#sidebar').isHidden(), true);
+  assert.equal(await page.locator('#prompt-panel').isHidden(), true);
+  assert.equal(await page.locator('#activity').isHidden(), true);
+  await page.locator('#sidebar-toggle').click();
+  await page.getByText('surface', { exact: true }).waitFor();
+  await page.locator('#prompt-toggle').click();
+  await page.locator('#sidebar-toggle').click();
   const frame = page.frameLocator('#surface-frame');
   await frame.getByText('3 passed', { exact: true }).waitFor();
   await page.locator('#prompt').fill('Draft survives data updates');
@@ -62,6 +70,7 @@ try {
   await page.getByText(/Message not sent/).waitFor();
   assert.equal(await page.locator('#prompt').inputValue(), 'Keep this after failure');
   await page.locator('#notice-dismiss').click();
+  await page.locator('#sidebar-toggle').click();
   await page.locator('#controls-open').click();
   await page.locator('#rename-input').fill('Renamed in browser');
   await page.getByRole('button', { name: 'Rename', exact: true }).click();
@@ -76,9 +85,11 @@ try {
   fixture.server.publish({ type: 'ui_prompt_end' });
   await mkdir(resolve('artifacts'), { recursive: true });
   await page.screenshot({ path: resolve('artifacts/desktop.png') });
+  await page.locator('#sidebar-toggle').click();
 
   await page.setViewportSize({ width: 390, height: 844 });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await page.locator('#sidebar-toggle').click();
   await page.locator('#activity-toggle').click();
   await page.getByRole('button', { name: 'Close conversation', exact: true }).last().waitFor();
   await page.locator('#activity-close').click();
@@ -91,6 +102,7 @@ try {
   fixture.state.session.idle = false;
   fixture.server.publish({ type: 'state_changed' });
   await page.locator('#abort').waitFor();
+  await page.waitForFunction(() => document.querySelector('#sidebar-toggle')?.getAttribute('data-status') === 'working');
   await page.locator('#prompt').fill('Steer the working Pi');
   await page.locator('#send').click();
   await page.waitForFunction(() => document.querySelector<HTMLTextAreaElement>('#prompt')?.value === '');

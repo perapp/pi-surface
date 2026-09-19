@@ -53,9 +53,17 @@ function showNotice(text, permanent = false) {
   ui['notice-text'].textContent = text;
   ui['notice-dismiss'].hidden = permanent;
 }
+function updatePiMark() {
+  const working = connected && state?.session?.idle === false;
+  const status = !connected || stopped ? 'offline' : working ? 'working' : 'online';
+  ui['sidebar-toggle'].dataset.status = status;
+  const action = ui['sidebar-toggle'].getAttribute('aria-expanded') === 'true' ? 'Close' : 'Open';
+  ui['sidebar-toggle'].setAttribute('aria-label', `${action} sidebar — ${status === 'offline' ? 'disconnected' : status}`);
+}
 function connection(label, status) {
   ui.connection.textContent = label;
   ui.connection.dataset.status = status;
+  updatePiMark();
 }
 function closeConnection(reason) {
   stopped = true;
@@ -132,6 +140,7 @@ function renderSession() {
   const pending = session.pending;
   const pendingCount = typeof pending === 'number' ? pending : Array.isArray(pending) ? pending.length : pending && typeof pending === 'object' ? Object.values(pending).reduce((sum, value) => sum + (Array.isArray(value) ? value.length : typeof value === 'number' ? value : 0), 0) : 0;
   ui['session-status'].textContent = state.uiPrompt ? `Waiting in terminal: ${state.uiPrompt.title || state.uiPrompt.kind || 'Pi dialog'}` : `${session.idle === false ? 'Pi is working' : 'Connected to the running session'}${pendingCount ? ` · ${pendingCount} queued` : pending === true ? ' · Messages queued' : ''}`;
+  updatePiMark();
   updateComposer();
 }
 function renderMessage(message) {
@@ -214,8 +223,8 @@ function renderSurfaces() {
     tab.addEventListener('click', () => selectSurface(surface.id));
     tab.addEventListener('keydown', (event) => {
       let next;
-      if (event.key === 'ArrowRight') next = (index + 1) % surfaces.length;
-      if (event.key === 'ArrowLeft') next = (index - 1 + surfaces.length) % surfaces.length;
+      if (event.key === 'ArrowDown' || event.key === 'ArrowRight') next = (index + 1) % surfaces.length;
+      if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') next = (index - 1 + surfaces.length) % surfaces.length;
       if (event.key === 'Home') next = 0;
       if (event.key === 'End') next = surfaces.length - 1;
       if (next !== undefined) { event.preventDefault(); selectSurface(surfaces[next].id); $(`surface-tab-${next}`)?.focus(); }
@@ -416,20 +425,40 @@ ui.prompt.addEventListener('keydown', (event) => {
 });
 ui.abort.addEventListener('click', async () => { try { await invoke('abort'); queueRefresh(); } catch (error) { showNotice(error.message); } });
 ui['notice-dismiss'].addEventListener('click', () => { ui.notice.hidden = true; });
+function toggleSidebar(open) {
+  document.querySelector('.shell').classList.toggle('sidebar-open', open);
+  ui.sidebar.hidden = !open;
+  ui['sidebar-backdrop'].hidden = !open;
+  ui['brand-name'].hidden = !open;
+  ui['sidebar-toggle'].setAttribute('aria-expanded', String(open));
+  updatePiMark();
+}
+function togglePanel(name, open, focus = true) {
+  const panel = name === 'conversation' ? ui.activity : ui['prompt-panel'];
+  const toggle = name === 'conversation' ? ui['activity-toggle'] : ui['prompt-toggle'];
+  panel.hidden = !open;
+  toggle.setAttribute('aria-pressed', String(open));
+  if (focus && open) (name === 'conversation' ? ui.messages : ui.prompt).focus();
+}
 ui['example-prompt'].addEventListener('click', () => {
+  togglePanel('prompt', true, false);
   if (!ui.prompt.value) ui.prompt.value = 'Create and open an interactive surface for the task we are working on.';
   ui.prompt.focus();
 });
-function toggleDrawer(open) {
-  document.querySelector('.workbench').classList.toggle('drawer-open', open);
-  ui['drawer-backdrop'].hidden = !open;
-  ui['activity-toggle'].setAttribute('aria-expanded', String(open));
-  if (open) ui['activity-close'].focus(); else ui['activity-toggle'].focus();
-}
-ui['activity-toggle'].addEventListener('click', () => toggleDrawer(ui['activity-toggle'].getAttribute('aria-expanded') !== 'true'));
-ui['activity-close'].addEventListener('click', () => toggleDrawer(false));
-ui['drawer-backdrop'].addEventListener('click', () => toggleDrawer(false));
-document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !ui.controls.open && ui['activity-toggle'].getAttribute('aria-expanded') === 'true') toggleDrawer(false); });
+ui['sidebar-toggle'].addEventListener('click', () => toggleSidebar(ui['sidebar-toggle'].getAttribute('aria-expanded') !== 'true'));
+ui['sidebar-backdrop'].addEventListener('click', () => toggleSidebar(false));
+ui['prompt-toggle'].addEventListener('click', () => {
+  togglePanel('prompt', ui['prompt-toggle'].getAttribute('aria-pressed') !== 'true');
+  if (matchMedia('(max-width: 760px)').matches) toggleSidebar(false);
+});
+ui['activity-toggle'].addEventListener('click', () => {
+  togglePanel('conversation', ui['activity-toggle'].getAttribute('aria-pressed') !== 'true');
+  if (matchMedia('(max-width: 760px)').matches) toggleSidebar(false);
+});
+ui['activity-close'].addEventListener('click', () => togglePanel('conversation', false, false));
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !ui.controls.open && ui['sidebar-toggle'].getAttribute('aria-expanded') === 'true') toggleSidebar(false);
+});
 
 // Composer command picker: use the same advertised commands and validated dispatch
 // as Session controls. Never pass arbitrary slash text to the model as a command.

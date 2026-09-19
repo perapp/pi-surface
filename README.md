@@ -47,7 +47,7 @@ CLI overrides: `--surface-host 127.0.0.1 --surface-port 9001`. Use `--surface-di
 
 ## Browser controls
 
-The persistent shell provides a conversation/activity view, surface tabs, text composer with automatic delivery (new prompt when idle, steering when working), abort, model/thinking selectors, commands, sessions, tree navigation/fork, and active tools. File picker, drag/drop, and image paste share the attachment pipeline. The **Actions** button beside Send opens a searchable picker for all advertised extension, skill, and prompt commands, with an optional arguments field and a shortcut to built-in session controls.
+The browser is surface-first: by default the active surface fills the viewport and only the Pi mark is visible. The mark is blue when connected, red when disconnected, and pulses blue while Pi works. It opens a sidebar with the session name/path, surface selection, Session controls, and independent toggles for the prompt and conversation panels. The prompt automatically starts a turn when idle or steers Pi while working. File picker, drag/drop, and image paste share the attachment pipeline. The **Actions** button beside Send opens a searchable picker for advertised extension, skill, and prompt commands, with optional arguments and a shortcut to built-in session controls.
 
 The bridge uses documented Pi extension APIs. Session mutations dispatch through an internal command so they receive a real command context. Built-in TUI commands aren't falsely treated as prompts: model/session/compaction controls have dedicated methods. Extension, skill, and prompt-template commands come from `pi.getCommands()`.
 
