@@ -74,9 +74,10 @@ h1, h2, h3, p { margin: 0; }
 .surface-tab[aria-selected="true"] { background: var(--blue-pale); color: var(--blue); }
 .sidebar-backdrop { display: none; }
 .main-shell { display: flex; flex-direction: column; flex: 1 1 0%; min-width: 0; min-height: 0; overflow: hidden; padding-top: 50px; background: var(--paper); }
-.notice { flex-shrink: 0; max-height: 25%; overflow: auto; display: flex; align-items: center; gap: 12px; padding: 12px 18px 12px 66px; background: #fff3f4; color: #812538; border-bottom: 1px solid #edcdd2; font-size: 13px; line-height: 1.5; }
-.notice span { flex: 1; overflow-wrap: anywhere; }
-.notice button { flex-shrink: 0; }
+.notice { position: absolute; z-index: 29; top: max(7px,env(safe-area-inset-top)); left: max(52px,calc(env(safe-area-inset-left) + 52px)); right: max(91px,calc(env(safe-area-inset-right) + 91px)); height: 36px; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 0 6px 0 11px; background: #fff3f4; color: #812538; border: 1px solid #edcdd2; border-radius: 8px; font-size: 12px; line-height: 1.3; }
+.shell.sidebar-open .notice { left: 132px; }
+.notice span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.notice button { flex-shrink: 0; width: 28px; height: 28px; padding: 0; color: currentColor; font-size: 18px; line-height: 1; }
 .workbench { position: relative; display: flex; min-width: 0; min-height: 0; flex: 1 1 0%; overflow: hidden; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); border-radius: 18px 0 0 0; }
 .shell.sidebar-open .workbench { border-left: 1px solid var(--line); border-radius: 18px 0 0 18px; }
 .workspace { display: flex; flex-direction: column; flex: 1 1 0%; min-width: 0; min-height: 0; background: var(--white); }
@@ -190,7 +191,8 @@ h1, h2, h3, p { margin: 0; }
   .surface-empty { padding-inline: 24px; }
   .surface-empty h1 { font-size: 27px; }
   .surface-empty > p:not(.eyebrow) { font-size: 13px; }
-  .notice { font-size: 12px; }
+  .notice { left: max(50px,calc(env(safe-area-inset-left) + 50px)); right: max(87px,calc(env(safe-area-inset-right) + 87px)); font-size: 11px; }
+  .shell.sidebar-open .notice { left: max(50px,calc(env(safe-area-inset-left) + 50px)); }
   .dialog-heading { padding: 17px; }
   .control-sections { padding-inline: 17px; }
   .control-grid, .tools-list { grid-template-columns: 1fr; }

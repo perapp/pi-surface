@@ -136,6 +136,12 @@ try {
   await page.locator('#prompt').fill('Keep this after failure'); fixture.failNext();
   await page.locator('#send').click();
   await page.getByText(/Message not sent/).waitFor();
+  const noticeGeometry = await page.evaluate(() => {
+    const notice = document.querySelector('#notice')!.getBoundingClientRect();
+    const canvas = document.querySelector('.workbench')!.getBoundingClientRect();
+    return { noticeBottom: notice.bottom, canvasTop: canvas.top };
+  });
+  assert.ok(noticeGeometry.noticeBottom <= noticeGeometry.canvasTop, 'notification stays inside the top control row');
   assert.equal(await page.locator('#prompt').inputValue(), 'Keep this after failure');
   await page.locator('#notice-dismiss').click();
   await page.locator('#controls-open').click();
