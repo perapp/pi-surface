@@ -76,4 +76,4 @@ Keep sorting/filtering/collapsing client-side. Only requests requiring reasoning
 
 Surfaces are **trusted harness applications**, not isolated hostile documents. Do not insert third-party executable content or assume an iframe is a security boundary.
 
-Pi 0.85 reloads extensions on session replacement. Temporary surfaces and uploaded files are deleted on stop/reload/new/resume/fork. Project/global surfaces survive. Ingest/copy uploads before changing sessions. Do not promise those files will exist when resuming an old transcript.
+Pi 0.85 recreates extensions during `/reload` and session replacement. Pi Surface hands temporary surfaces, uploaded files, credentials, and its listening address to the fresh extension instance on `/reload`, so connected browsers normally reconnect automatically without losing state. Temporary files are still deleted on `/surface stop`, quit, new, resume, or fork; project/global surfaces survive those boundaries. Ingest/copy uploads before changing sessions or exiting Pi. Do not promise temporary files will exist when resuming an old transcript.

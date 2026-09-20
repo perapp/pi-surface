@@ -1,12 +1,12 @@
 import { randomBytes } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import QRCode from 'qrcode';
 import { Type } from 'typebox';
 import { StringEnum, type TextContent, type ImageContent } from '@earendil-works/pi-ai';
 import { CONFIG_DIR_NAME, getAgentDir, SessionManager, truncateHead, type ExtensionAPI, type ExtensionContext, type MessageStartEvent, type MessageUpdateEvent, type MessageEndEvent } from '@earendil-works/pi-coding-agent';
-import { HttpError, SurfaceServer } from './server.ts';
+import { HttpError, SurfaceServer, type SurfaceServerHandoff } from './server.ts';
 
 function text(params: Record<string, unknown>, key: string, max = 100_000): string {
   const value = params[key];
@@ -14,6 +14,33 @@ function text(params: Record<string, unknown>, key: string, max = 100_000): stri
   return value;
 }
 const modelInfo = (model: { id: string; name: string; provider: string }) => ({ id: model.id, name: model.name, provider: model.provider });
+
+type ReloadEntry = { handoff: SurfaceServerHandoff; timer: ReturnType<typeof setTimeout> };
+const reloadHandoffsSymbol = Symbol.for('pi-surface.reload-handoffs.v1');
+function reloadHandoffs(): Map<string, ReloadEntry> {
+  const shared = globalThis as typeof globalThis & { [reloadHandoffsSymbol]?: Map<string, ReloadEntry> };
+  return shared[reloadHandoffsSymbol] ??= new Map();
+}
+const reloadKey = (current: ExtensionContext) => `${current.sessionManager.getSessionId()}\0${current.cwd}`;
+function stashReload(current: ExtensionContext, handoff: SurfaceServerHandoff) {
+  const entries = reloadHandoffs();
+  const key = reloadKey(current);
+  const previous = entries.get(key);
+  if (previous) { clearTimeout(previous.timer); void rm(previous.handoff.directory, { recursive: true, force: true }); }
+  const timer = setTimeout(() => {
+    if (entries.get(key)?.handoff !== handoff) return;
+    entries.delete(key); void rm(handoff.directory, { recursive: true, force: true });
+  }, 30_000);
+  timer.unref();
+  entries.set(key, { handoff, timer });
+}
+function takeReload(current: ExtensionContext): SurfaceServerHandoff | undefined {
+  const entries = reloadHandoffs();
+  const entry = entries.get(reloadKey(current));
+  if (!entry) return;
+  clearTimeout(entry.timer); entries.delete(reloadKey(current));
+  return entry.handoff;
+}
 
 /** No SDK session is created: every action below targets the extension's live session. */
 export default function surfaceExtension(pi: ExtensionAPI) {
@@ -173,7 +200,7 @@ export default function surfaceExtension(pi: ExtensionAPI) {
           try { pi.sendUserMessage(`/${controlCommand} ${requestId}`, { expandPromptTemplates: true, deliverAs: 'followUp' }); }
           catch (error) { controls.delete(requestId); server?.publish({ type: 'surface_error', message: String(error) }); }
         }, 30);
-        return { accepted: true, note: 'Session replacement rotates the URL/token; reconnect using /surface in Pi.' };
+        return { accepted: true, note: method === 'reload' ? 'Reloading extensions and reconnecting this surface automatically.' : 'Session replacement rotates the URL/token; reconnect using /surface in Pi.' };
       }
       default: throw new HttpError(400, `Unsupported method: ${method}`);
     }
@@ -203,7 +230,7 @@ export default function surfaceExtension(pi: ExtensionAPI) {
     },
   });
 
-  async function start(current: ExtensionContext, announceStart = true) {
+  async function start(current: ExtensionContext, announceStart = true, handoff?: SurfaceServerHandoff) {
     if (server) return;
     if (starting) return starting;
     starting = (async () => {
@@ -223,10 +250,10 @@ export default function surfaceExtension(pi: ExtensionAPI) {
       const candidate = new SurfaceServer({
         cwd: current.cwd, globalRoot: join(getAgentDir(), 'surfaces'), projectRoot: join(current.cwd, CONFIG_DIR_NAME, 'agent', 'surfaces'),
         trusted: current.isProjectTrusted(), host, port, state, invoke,
-      });
+      }, handoff);
       await candidate.start(); server = candidate;
       if (current.hasUI) current.ui.setStatus('pi-surface', `surface :${candidate.port}`);
-      if (announceStart) await announce(current, false);
+      if (announceStart && (!handoff || !candidate.continuedOrigin)) await announce(current, false);
     })();
     try { await starting; } finally { starting = undefined; }
   }
@@ -287,13 +314,21 @@ export default function surfaceExtension(pi: ExtensionAPI) {
     if (context?.hasUI) { context.ui.setWidget('pi-surface', undefined); context.ui.setStatus('pi-surface', undefined); }
   }
 
-  pi.on('session_start', async (_event, current) => {
+  pi.on('session_start', async (event, current) => {
     context = current; activeMessage = undefined; lastUiPrompt = undefined;
-    if (current.mode === 'tui' && !pi.getFlag('surface-disabled')) {
-      try { await start(current); } catch (error) { current.ui.notify(`Pi Surface: ${String(error)}`, 'error'); }
+    const handoff = event.reason === 'reload' ? takeReload(current) : undefined;
+    if (handoff || (current.mode === 'tui' && !pi.getFlag('surface-disabled'))) {
+      try { await start(current, true, handoff); } catch (error) { current.ui.notify(`Pi Surface: ${String(error)}`, 'error'); }
     }
   });
-  pi.on('session_shutdown', async (event) => { await stop(event.reason); context = undefined; });
+  pi.on('session_shutdown', async (event, current) => {
+    clearTimeout(controlTimer); controls.clear();
+    if (event.reason === 'reload' && server) {
+      const previous = server; server = undefined;
+      stashReload(current, await previous.preserveForReload());
+    } else await stop(event.reason);
+    context = undefined;
+  });
   const changed = (_event: unknown, current: ExtensionContext) => { context = current; publishState(); };
   pi.on('agent_start', changed);
   pi.on('agent_end', changed);

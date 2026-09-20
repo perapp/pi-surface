@@ -11,6 +11,16 @@ export class HttpError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
 export interface Attachment { id: string; name: string; mimeType: string; size: number; path: string; used: boolean }
+export interface SurfaceServerHandoff {
+  version: 1;
+  directory: string;
+  host: string;
+  port: number;
+  token: string;
+  cookieName: string;
+  cookies: string[];
+  attachments: Attachment[];
+}
 export interface ServerOptions {
   cwd: string; globalRoot: string; projectRoot?: string; trusted: boolean;
   host?: string; port?: number;
@@ -34,24 +44,30 @@ export const contentType = (path: string) => MIME[extname(path).toLowerCase()] ?
 const webRoot = fileURLToPath(new URL('../web/', import.meta.url));
 
 export class SurfaceServer {
-  readonly token = secret();
-  readonly cookieName = `pi_surface_${randomBytes(8).toString('hex')}`;
+  readonly token: string;
+  readonly cookieName: string;
   readonly clients = new Set<ServerResponse>();
-  readonly attachments = new Map<string, Attachment>();
-  readonly cookies = new Set<string>();
+  readonly attachments: Map<string, Attachment>;
+  readonly cookies: Set<string>;
   readonly server = createServer((req, res) => { void this.handle(req, res); });
   store!: SurfaceStore;
   directory = '';
   port = 0;
   urls: string[] = [];
+  continuedOrigin = false;
   private hosts = new Set<string>();
   private heartbeat?: ReturnType<typeof setInterval>;
   private closing = false;
+  private transferred = false;
   private reservedBytes = 0;
   private activeUploads = 0;
   private operations = new Set<Promise<unknown>>();
 
-  constructor(readonly options: ServerOptions) {
+  constructor(readonly options: ServerOptions, private readonly handoff?: SurfaceServerHandoff) {
+    this.token = handoff?.token ?? secret();
+    this.cookieName = handoff?.cookieName ?? `pi_surface_${randomBytes(8).toString('hex')}`;
+    this.cookies = new Set(handoff?.cookies ?? []);
+    this.attachments = new Map((handoff?.attachments ?? []).map(file => [file.id, { ...file }]));
     this.server.requestTimeout = 30_000;
     this.server.headersTimeout = 10_000;
   }
@@ -59,20 +75,33 @@ export class SurfaceServer {
   async start() {
     const host = this.options.host ?? '0.0.0.0';
     if (!isIP(host)) throw new Error('surface host must be a literal IPv4 or IPv6 address');
-    this.directory = await mkdtemp(join(tmpdir(), 'pi-surface-'));
+    this.directory = this.handoff?.directory ?? await mkdtemp(join(tmpdir(), 'pi-surface-'));
     try {
-      await mkdir(join(this.directory, 'uploads'), { mode: 0o700 });
+      await mkdir(join(this.directory, 'uploads'), { mode: 0o700, recursive: true });
       this.store = new SurfaceStore({
         cwd: this.options.cwd, globalRoot: this.options.globalRoot, projectRoot: this.options.projectRoot,
         trusted: this.options.trusted, temporaryRoot: join(this.directory, 'surfaces'), onEvent: event => this.publish(event),
       });
       await this.store.start();
-      await new Promise<void>((resolve, reject) => {
-        this.server.once('error', reject);
-        this.server.listen(this.options.port ?? 0, host, () => { this.server.off('error', reject); resolve(); });
+      const configuredPort = this.options.port ?? 0;
+      const desiredPort = this.handoff && this.handoff.host === host && (configuredPort === 0 || configuredPort === this.handoff.port)
+        ? this.handoff.port : configuredPort;
+      const listen = (port: number) => new Promise<void>((resolve, reject) => {
+        const onError = (error: Error) => { this.server.off('listening', onListening); reject(error); };
+        const onListening = () => { this.server.off('error', onError); resolve(); };
+        this.server.once('error', onError); this.server.once('listening', onListening);
+        this.server.listen(port, host);
       });
+      try { await listen(desiredPort); }
+      catch (error) {
+        // Keep the handed-off files even if another process claimed the old port during reload.
+        // A fresh port changes the origin, so index.ts announces the replacement URL.
+        if (!this.handoff || (error as NodeJS.ErrnoException).code !== 'EADDRINUSE') throw error;
+        await listen(0);
+      }
       this.server.on('error', error => this.publish({ type: 'surface_error', message: error.message }));
       this.port = (this.server.address() as { port: number }).port;
+      this.continuedOrigin = !!this.handoff && this.handoff.host === host && this.handoff.port === this.port;
       const addresses = host === '0.0.0.0' || host === '::'
         ? ['127.0.0.1', ...(host === '::' ? ['::1'] : []), ...Object.values(networkInterfaces()).flatMap(items =>
           (items ?? []).filter(item => !item.internal && item.family === 'IPv4').map(item => item.address))]
@@ -245,8 +274,28 @@ export class SurfaceServer {
     throw new HttpError(404, 'Not found');
   }
 
+  async preserveForReload(): Promise<SurfaceServerHandoff> {
+    if (this.closing) throw new Error('Pi Surface is already closing');
+    this.closing = true;
+    clearInterval(this.heartbeat);
+    this.publish({ type: 'server_reloading' });
+    for (const client of this.clients) client.end();
+    this.clients.clear();
+    await this.store?.close();
+    this.server.closeAllConnections();
+    await new Promise<void>(resolve => this.server.close(() => resolve()));
+    await Promise.allSettled([...this.operations]);
+    const handoff: SurfaceServerHandoff = {
+      version: 1, directory: this.directory, host: this.options.host ?? '0.0.0.0', port: this.port,
+      token: this.token, cookieName: this.cookieName, cookies: [...this.cookies],
+      attachments: [...this.attachments.values()].map(file => ({ ...file })),
+    };
+    this.transferred = true;
+    return handoff;
+  }
+
   async close(reason = 'shutdown') {
-    if (this.closing) return;
+    if (this.transferred || this.closing) return;
     this.closing = true;
     clearInterval(this.heartbeat);
     this.publish({ type: 'server_closing', reason });

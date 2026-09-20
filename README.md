@@ -55,7 +55,7 @@ Configuration: `~/.pi/agent/surface.json`, overridden by trusted-project `.pi/su
 
 CLI overrides: `--surface-host 127.0.0.1 --surface-port 9001`. Use `--surface-disabled` to suppress automatic startup. Hosts must be literal IP addresses; LAN discovery currently advertises IPv4 interfaces (a specifically bound IPv6 address also works). There is deliberately no unauthenticated mode.
 
-**Pi 0.85 session lifecycle:** `/new`, resume, fork, and `/reload` tear down and recreate extensions. Pi Surface therefore closes connections, cleans temporary files, and generates a new URL/token. The browser tells you to reconnect from `/surface`; it never silently sends old-page actions to a replacement session. Project/global surfaces survive; temporary surfaces and uploads do not.
+**Pi 0.85 session lifecycle:** `/new`, resume, fork, and `/reload` tear down and recreate extensions. On `/reload`, Pi Surface hands its private runtime directory, uploads, authentication, and listening address to the fresh extension instance; connected browsers briefly reconnect automatically while temporary surfaces, attachments, drafts, and the active view remain available. A real session replacement (`/new`, resume, or fork), `/surface stop`, or process exit still closes connections, rotates credentials, and deletes temporary files.
 
 ## Browser controls
 
@@ -88,7 +88,7 @@ The bridge uses documented Pi extension APIs. Session mutations dispatch through
 
 | Scope | Storage | Lifetime |
 |---|---|---|
-| Temporary | Private OS temporary directory | Until extension shutdown/reload/session replacement |
+| Temporary | Private OS temporary directory | Current Pi process/session; survives `/reload` |
 | Project | `.pi/agent/surfaces/` | Version-controlled project files |
 | Global | `~/.pi/agent/surfaces/` | Reusable user applications |
 
@@ -122,7 +122,7 @@ Or use the bundled prompt template:
 
 The `report-surface` skill defines the reusable `adaptive-report/v1` action/event contract. A report sends `adaptive-report-regenerate` or `adaptive-report-expand` with its current state and a request ID; Pi returns the generated result with `surface emit`. Standard top controls use a **Technical depth** dropdown (Plain language, General audience, Technical, Expert), a **Reading time** dropdown (2, 5, 10, or 15 minutes), and one **Regenerate report** button that submits both choices in a single inference. Whole-report regeneration may change the section count instead of merely padding or truncating prose.
 
-Action submission only acknowledges that generation was queued. The report keeps an accessible loading state until the matching event arrives, rejects stale request IDs, and recovers on timeout. Custom events are transient; durable reports should keep canonical state in a declared watched file when they must survive reloads.
+Action submission only acknowledges that generation was queued. The report keeps an accessible loading state until the matching event arrives, rejects stale request IDs, and recovers on timeout. Custom events are transient and are not replayed after reconnect; durable reports should keep canonical state in their surface files or a declared watched file.
 
 ## Browser API (protocol 1)
 
@@ -164,14 +164,14 @@ Prompt promises acknowledge submission, **not a completed model response**. Resp
 
 **Possession of the access URL grants control of Pi, including its tools and credentials.** Generated surfaces are trusted applications on that same authenticated origin, not an untrusted-code sandbox. Only open surface code you trust.
 
-- Fresh cryptographic 256-bit bootstrap token per server lifetime; never stored in project/session output by the extension.
+- Fresh cryptographic 256-bit bootstrap token per session runtime; retained only in process memory across `/reload` and never stored in project/session output by the extension.
 - Authentication required even on loopback; the bootstrap URL exchanges its token for an HttpOnly, SameSite=Strict cookie, serves the landing page directly, and removes the token from browser history before application startup. This avoids external QR-scanner redirect chains withholding the new Strict cookie.
 - Random per-instance cookie names prevent cookie collisions between Pi ports. Credentials do not work in another instance.
 - Strict Host allowlist, Origin checks, mutation-only custom header, no CORS, no-cache/no-referrer headers, and same-origin resource CSP.
 - **Plain HTTP is not encrypted.** Use only a trusted LAN or bind loopback and use a secure tunnel. Do not forward the port onto the Internet. Proxy/HTTPS termination and DNS hostnames are not configured automatically. Browser history, Settings QR screenshots, process lists from `/surface open`, and copied links may expose the authenticated bootstrap URL; anyone holding it can control the session.
 - Files upload as opaque IDs to a private `0700` directory with `0600` files. The browser never supplies a destination path. Recognized image bytes become native Pi image blocks; other files become quoted local path references for Pi's file/document tools.
-- Limit: 10 MiB/file, 100 MiB and 100 files/runtime, 10 attachments/message, 32 browser logins, 64 event connections. Uploaded files are retained until shutdown so queued prompts can read them; unsent files can be removed in the composer.
-- Uploads are **not durable**. Copy/ingest them into the project before switching sessions or reloading; old session transcripts may reference files that have since been deleted. No automatic PDF/Office extraction is claimed.
+- Limit: 10 MiB/file, 100 MiB and 100 files/runtime, 10 attachments/message, 32 browser logins, 64 event connections. Uploaded files are retained across `/reload` and until session shutdown so queued prompts can read them; unsent files can be removed in the composer.
+- Uploads are **not durable storage**. Copy/ingest them into the project before switching sessions or exiting Pi; old session transcripts may reference files that have since been deleted. No automatic PDF/Office extraction is claimed.
 
 ## Verification
 

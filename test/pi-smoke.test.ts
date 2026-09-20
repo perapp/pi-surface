@@ -7,7 +7,7 @@ import { join, resolve } from 'node:path';
 import { once } from 'node:events';
 
 // Real Pi/Jiti smoke test, no provider credentials and no inference.
-test('loads in real Pi; HTTP and RPC observe the same session; session replacement closes old server', { timeout: 30_000 }, async () => {
+test('loads in real Pi; reload preserves the server runtime; session replacement closes it', { timeout: 30_000 }, async () => {
   const root = await mkdtemp(join(tmpdir(), 'pi-surface-real-pi-'));
   await mkdir(join(root, 'agent'));
   const child = spawn(process.execPath, [resolve('node_modules/@earendil-works/pi-coding-agent/dist/cli.js'), '--mode', 'rpc', '--no-session', '--no-skills', '-e', resolve('src/index.ts'), '--surface-host', '127.0.0.1'], {
@@ -58,6 +58,32 @@ test('loads in real Pi; HTTP and RPC observe the same session; session replaceme
     const renamed = await fetch(base + '/api/invoke', { method: 'POST', headers, body: JSON.stringify({ method: 'renameSession', params: { name: 'Browser owns the same session' } }) });
     assert.equal(renamed.status, 200);
     assert.equal((await rpc('get_state')).sessionName, 'Browser owns the same session');
+
+    const uploaded = await (await fetch(base + '/api/upload', {
+      method: 'POST', headers: { ...headers, 'x-file-name': 'reload.txt' }, body: 'survives reload',
+    })).json();
+    const reloadEvents = await fetch(base + '/api/events', { headers });
+    const reloadReader = reloadEvents.body!.getReader(); await reloadReader.read();
+    assert.equal((await fetch(base + '/api/invoke', { method: 'POST', headers, body: JSON.stringify({ method: 'reload', params: {} }) })).status, 200);
+    let sawReloading = false;
+    for (;;) {
+      const chunk = await reloadReader.read();
+      if (chunk.done) break;
+      if (new TextDecoder().decode(chunk.value).includes('server_reloading')) sawReloading = true;
+    }
+    assert.ok(sawReloading);
+    let reloadState: Response | undefined;
+    for (let attempt = 0; attempt < 100; attempt++) {
+      try {
+        reloadState = await fetch(base + '/api/state', { headers });
+        if (reloadState.status === 200) break;
+      } catch { /* listener is being rebound */ }
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    assert.equal(reloadState?.status, 200, 'same authenticated origin returns after reload');
+    assert.equal((await reloadState!.json()).session.id, rpcState.sessionId);
+    assert.equal((await fetch(base + '/api/upload/' + uploaded.id, { method: 'DELETE', headers })).status, 200, 'attachment ID survives reload');
+
     const sse = await fetch(base + '/api/events', { headers }); const reader = sse.body!.getReader(); await reader.read();
     assert.equal((await fetch(base + '/api/invoke', { method: 'POST', headers, body: JSON.stringify({ method: 'newSession', params: {} }) })).status, 200);
     let sawClosing = false;

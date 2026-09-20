@@ -120,6 +120,42 @@ test('SSE sends snapshot, live events, closing notification; connections close c
   } finally { await f.cleanup(); }
 });
 
+test('reload handoff preserves origin, temporary surfaces, authentication and attachments', async () => {
+  const f = await fixture();
+  let replacement: SurfaceServer | undefined;
+  try {
+    const surface = await f.server.store.create({ id: 'reload-report', name: 'Reload report', html: '<p>survives</p>' });
+    const uploadHeaders = { cookie: f.cookie, 'x-pi-surface': '1', 'x-file-name': 'notes.txt' };
+    const uploaded = await (await fetch(f.base + '/api/upload', { method: 'POST', headers: uploadHeaders, body: 'keep me' })).json();
+    f.server.attachmentIds([uploaded.id])[0].used = true;
+    const events = await fetch(f.base + '/api/events', { headers: { cookie: f.cookie } });
+    const reader = events.body!.getReader(); await reader.read();
+    const reloading = reader.read();
+    const directory = f.server.directory;
+    const handoff = await f.server.preserveForReload();
+    assert.match(new TextDecoder().decode((await reloading).value), /server_reloading/);
+    assert.equal((await stat(directory)).isDirectory(), true);
+    await f.server.close();
+    assert.equal((await stat(directory)).isDirectory(), true, 'retired server no longer owns handed-off files');
+
+    replacement = new SurfaceServer({ cwd: f.root, globalRoot: join(f.root, 'global'), host: '127.0.0.1', trusted: true,
+      state: () => ({ session: { id: 'same-session' }, messages: [] }), invoke: () => ({ accepted: true }),
+    }, handoff);
+    await replacement.start();
+    assert.equal(replacement.continuedOrigin, true);
+    assert.equal(replacement.port, f.server.port);
+    assert.equal(replacement.token, f.server.token);
+    assert.equal(replacement.cookieName, f.server.cookieName);
+    assert.ok(replacement.store.list().some(item => item.id === surface.id));
+    assert.equal(await readFile(replacement.attachmentIds([uploaded.id])[0].path, 'utf8'), 'keep me');
+    assert.equal(replacement.attachmentIds([uploaded.id])[0].used, true);
+    assert.equal((await fetch(f.base + '/api/state', { headers: { cookie: f.cookie } })).status, 200);
+    assert.equal((await fetch(f.base + '/api/upload/' + uploaded.id, { method: 'DELETE', headers: uploadHeaders })).status, 409);
+    await replacement.close(); replacement = undefined;
+    await assert.rejects(stat(directory));
+  } finally { await replacement?.close(); await f.cleanup(); }
+});
+
 test('surface HTML receives automatic bridge; data is read only from declared dependencies', async () => {
   const f = await fixture();
   try {
