@@ -26,8 +26,9 @@ test('every route requires authentication, including loopback and assets', async
     for (const path of ['/', '/app.js', '/bridge.js', '/api/state', '/api/events', '/api/data/a?path=a', '/surfaces/a/index.html']) {
       assert.equal((await fetch(f.base + path)).status, 401, path);
     }
-    assert.equal(f.auth.status, 303);
-    assert.equal(f.auth.headers.get('location'), '/');
+    assert.equal(f.auth.status, 200);
+    assert.equal(f.auth.headers.get('location'), null);
+    assert.match(await f.auth.text(), /history\.replaceState\(null,'','\/'\)/);
     assert.match(f.auth.headers.get('set-cookie')!, /HttpOnly; SameSite=Strict/);
     assert.equal((await fetch(`${f.base}/?token=bad`)).status, 401);
     assert.equal((await fetch(`${f.base}/?token=${encodeURIComponent('é'.repeat(43))}`)).status, 401);

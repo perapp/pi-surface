@@ -9,7 +9,7 @@ Keep a serializable state object in the page:
 ```js
 const report = {
   protocol: 'adaptive-report/v1',
-  surfaceId: 'topic-report', // stable unqualified surface slug
+  surfaceId: surface.id, // canonical runtime ID, e.g. temporary:topic-report
   topic: 'The Linux kernel',
   title: 'Inside the Linux kernel',
   lede: '...',
@@ -30,7 +30,7 @@ const report = {
 };
 ```
 
-The visual design may add fields, but action payloads must remain self-contained. Do not put secrets, credentials, or local filesystem paths in state.
+The visual design may add fields, but action payloads must remain self-contained. Do not put secrets, credentials, or local filesystem paths in state. `surface.id` is assigned by the bridge and includes the runtime scope (`temporary:`, `project:`, or `global:`). Always use it instead of hard-coding the creation slug. If a regenerated report contains a different `surfaceId`, replace it with `surface.id` before storing the report.
 
 ## Whole-report regeneration
 
@@ -38,9 +38,9 @@ Send only after an explicit reader action:
 
 ```js
 const requestId = crypto.randomUUID();
-await surface.action('adaptive-report-regenerate', report.surfaceId, {
+await surface.action('adaptive-report-regenerate', 'report', {
   protocol: 'adaptive-report/v1',
-  surfaceId: report.surfaceId,
+  surfaceId: surface.id,
   requestId,
   requested: {
     readingLevel: 'technical',
@@ -57,13 +57,13 @@ The model emits:
 ```json
 {
   "action": "emit",
-  "id": "topic-report",
+  "id": "temporary:topic-report",
   "event": "adaptive-report-replaced",
   "data": {
     "requestId": "same-id",
     "report": {
       "protocol": "adaptive-report/v1",
-      "surfaceId": "topic-report",
+      "surfaceId": "temporary:topic-report",
       "topic": "The Linux kernel",
       "title": "Inside the Linux kernel",
       "lede": "...",
@@ -77,7 +77,7 @@ The model emits:
 }
 ```
 
-The browser must compare `requestId` with its pending request before replacing state. A full replacement normally clears previous expansions because their level may no longer match.
+The handler must use the top-level `surfaceId` from the `Surface action:` envelope as the emit tool's `id`; that value is the authoritative return address. The browser must compare `requestId` with its pending request before replacing state and normalize the replacement with `report = { ...data.report, surfaceId: surface.id }`. A full replacement normally clears previous expansions because their level may no longer match.
 
 ## Section expansion
 
@@ -87,7 +87,7 @@ Send the current section and report settings, not merely its ID:
 const requestId = crypto.randomUUID();
 await surface.action('adaptive-report-expand', section.id, {
   protocol: 'adaptive-report/v1',
-  surfaceId: report.surfaceId,
+  surfaceId: surface.id,
   requestId,
   topic: report.topic,
   readingLevel: report.readingLevel,
@@ -103,7 +103,7 @@ The model emits:
 ```json
 {
   "action": "emit",
-  "id": "topic-report",
+  "id": "temporary:topic-report",
   "event": "adaptive-report-expanded",
   "data": {
     "requestId": "same-id",
@@ -152,7 +152,7 @@ function accept(data, kind) {
 
 surface.on('adaptive-report-replaced', data => {
   if (!accept(data, 'regenerate')) return;
-  report = data.report;
+  report = { ...data.report, surfaceId: surface.id };
   renderReport(); // construct nodes and assign generated strings with textContent
 });
 

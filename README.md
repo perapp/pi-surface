@@ -153,7 +153,7 @@ Prompt promises acknowledge submission, **not a completed model response**. Resp
 **Possession of the access URL grants control of Pi, including its tools and credentials.** Generated surfaces are trusted applications on that same authenticated origin, not an untrusted-code sandbox. Only open surface code you trust.
 
 - Fresh cryptographic 256-bit bootstrap token per server lifetime; never stored in project/session output by the extension.
-- Authentication required even on loopback; bootstrap URL exchanges its token for an HttpOnly, SameSite=Strict cookie and redirects to `/`.
+- Authentication required even on loopback; the bootstrap URL exchanges its token for an HttpOnly, SameSite=Strict cookie, serves the landing page directly, and removes the token from browser history before application startup. This avoids external QR-scanner redirect chains withholding the new Strict cookie.
 - Random per-instance cookie names prevent cookie collisions between Pi ports. Credentials do not work in another instance.
 - Strict Host allowlist, Origin checks, mutation-only custom header, no CORS, no-cache/no-referrer headers, and same-origin resource CSP.
 - **Plain HTTP is not encrypted.** Use only a trusted LAN or bind loopback and use a secure tunnel. Do not forward the port onto the Internet. Proxy/HTTPS termination and DNS hostnames are not configured automatically. Browser history, Settings QR screenshots, process lists from `/surface open`, and copied links may expose the authenticated bootstrap URL; anyone holding it can control the session.

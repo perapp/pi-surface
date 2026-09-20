@@ -33,6 +33,7 @@ Read [`../pi-surface/SKILL.md`](../pi-surface/SKILL.md) for the core Surface lif
 - Changing either dropdown is local UI state. Only the explicit **Regenerate report** button sends an `adaptive-report-regenerate` action to Pi, combining both selected values in one inference. Do not approximate the result through client-side truncation, hidden prewritten variants, or CSS.
 - A section expansion sends `adaptive-report-expand`. Generate useful additional detail rather than restating the visible section.
 - Include the current report state in each action. Surface events are transient, and the model must have enough context to respond after compaction.
+- Use the bridge-provided `surface.id` as the canonical, scope-qualified surface ID. Never hard-code or derive the return address from the creation slug.
 - Include a unique `requestId`; ignore stale responses in the browser.
 - The action promise acknowledges queueing only. Keep a loading state until the matching emitted event arrives, with a timeout that restores controls and explains how to retry.
 - Never invoke inference on page load, rendering, reconnect, or a watched-file callback.
@@ -45,8 +46,8 @@ Read [`../pi-surface/SKILL.md`](../pi-surface/SKILL.md) for the core Surface lif
 When the session receives a structured `Surface action:` message using this protocol:
 
 1. Perform the requested rewrite or expansion.
-2. Call the `surface` tool with `action: "emit"`, using the surface ID and response event specified in the action data.
-3. Echo the same `requestId` in the event payload so the page can reject stale results.
+2. Read the canonical, scope-qualified `surfaceId` from the top level of the `Surface action:` envelope. Call the `surface` tool with `action: "emit"`, using that exact ID and the response event specified in `data.responseEvent`. Do not use `data.surfaceId` as the return address.
+3. Echo the same `data.requestId` in the event payload so the page can reject stale results.
 4. For regeneration, return a complete replacement report at the requested level and length. Adjust section count when useful.
 5. For expansion, return only the requested section addition and avoid repeating its current content.
 6. After the emit succeeds, respond with at most one short confirmation sentence.

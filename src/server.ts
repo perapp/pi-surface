@@ -185,7 +185,14 @@ export class SurfaceServer {
       if (this.cookies.size >= 32) throw new HttpError(429, 'Too many browser sessions; restart pi-surface');
       const cookie = secret(); this.cookies.add(cookie);
       res.setHeader('Set-Cookie', `${this.cookieName}=${cookie}; HttpOnly; SameSite=Strict; Path=/`);
-      res.writeHead(303, { Location: '/' }); res.end(); return;
+      // Serve the authenticated landing page directly. A redirect from an external QR
+      // scanner can withhold a newly-set SameSite=Strict cookie for the redirect chain.
+      // Clean the token from browser history before the application module starts.
+      const html = (await readFile(join(webRoot, 'index.html'), 'utf8')).replace(
+        /<head\b[^>]*>/i,
+        match => `${match}<script>history.replaceState(null,'','/')</script>`,
+      );
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(html); return;
     }
     if (!this.authenticated(req)) throw new HttpError(401, 'Open the authenticated URL from /surface in Pi');
     if (req.headers['sec-fetch-site'] === 'cross-site') throw new HttpError(403, 'Cross-site request rejected');

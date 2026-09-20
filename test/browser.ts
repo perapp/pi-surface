@@ -9,6 +9,16 @@ const fixture = await browserFixture();
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH ?? '/usr/bin/google-chrome', headless: true });
 const errors: string[] = [];
 try {
+  // Model an external QR scanner handing the authenticated URL to a fresh browser.
+  // The first response must bootstrap the app without relying on a Strict cookie in a redirect chain.
+  const scanContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const scanPage = await scanContext.newPage();
+  await scanPage.setContent(`<a id="scan" href="${fixture.server.urls[0]}">Open QR</a>`);
+  await scanPage.locator('#scan').click();
+  await scanPage.waitForFunction(() => document.querySelector('#connection')?.textContent === 'Live');
+  assert.equal(new URL(scanPage.url()).search, '');
+  await scanContext.close();
+
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   const page = await context.newPage();
   page.on('pageerror', error => errors.push(error.message));

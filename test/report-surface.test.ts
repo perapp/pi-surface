@@ -34,5 +34,8 @@ test('package ships the Adaptive Report Surface skill and prompt', async () => {
     assert.match(protocol, new RegExp(event));
   }
   assert.match(skill, /target reading time/i);
+  assert.match(skill, /top level of the `Surface action:` envelope/i);
+  assert.match(protocol, /surfaceId: surface\.id/);
+  assert.doesNotMatch(protocol, /unqualified surface slug/);
   assert.match(prompt, /2, 5, 10, or 15 minutes/);
 });

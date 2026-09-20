@@ -11,6 +11,7 @@ async function fixture(options: { mode?: 'tui' | 'rpc'; host?: string } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'pi-surface-extension-test-'));
   const events = new Map<string, Handler[]>();
   const commands = new Map<string, { handler: Handler; description: string }>();
+  const tools = new Map<string, any>();
   const sent: { content: any; options: any }[] = [];
   const notices: string[] = [];
   const widgets: unknown[] = [];
@@ -22,7 +23,7 @@ async function fixture(options: { mode?: 'tui' | 'rpc'; host?: string } = {}) {
   sm.appendMessage({ role: 'user', content: 'hello from terminal', timestamp: Date.now() });
   const api = {
     on: (name: string, handler: Handler) => events.set(name, [...events.get(name) ?? [], handler]),
-    registerCommand: (name: string, options: any) => commands.set(name, options), registerFlag: () => {}, registerTool: () => {},
+    registerCommand: (name: string, options: any) => commands.set(name, options), registerFlag: () => {}, registerTool: (options: any) => tools.set(options.name, options),
     getFlag: (flag: string) => flag === 'surface-host' ? options.host ?? '127.0.0.1' : undefined,
     getSessionName: () => name, setSessionName: (next: string) => { name = next; },
     getThinkingLevel: () => thinking, setThinkingLevel: (next: string) => { thinking = next; },
@@ -69,7 +70,11 @@ async function fixture(options: { mode?: 'tui' | 'rpc'; host?: string } = {}) {
     const response = await fetch(base + '/api/invoke', { method: 'POST', headers, body: JSON.stringify({ method, params }) });
     return { status: response.status, ...(await response.json()) };
   };
-  return { invoke, emit, sent, headers, base, sessionActions, sm, notices, widgets, url, command: (args: string) => commands.get('surface')!.handler(args, context), setBusy: (value: boolean) => { busy = value; }, aborted: () => aborted,
+  const createSurface = async (id: string) => {
+    await tools.get('surface')!.execute('test', { action: 'create', id, name: 'Test surface', html: '<p>test</p>' }, new AbortController().signal, () => {}, context);
+    return `temporary:${id}`;
+  };
+  return { invoke, emit, sent, headers, base, sessionActions, sm, notices, widgets, url, createSurface, command: (args: string) => commands.get('surface')!.handler(args, context), setBusy: (value: boolean) => { busy = value; }, aborted: () => aborted,
     cleanup: async () => { await emit('session_shutdown', { reason: 'quit' }); await rm(root, { recursive: true, force: true }); } };
 }
 
@@ -101,6 +106,32 @@ test('adapter uses same session, native user messages, busy delivery, validation
     assert.equal((await f.invoke('setActiveTools', { names: ['exec-anything'] })).status, 400);
     assert.equal((await f.invoke('command', { name: 'settings' })).status, 400);
     assert.equal((await f.invoke('eval', { code: 'bad' })).status, 400);
+  } finally { await f.cleanup(); }
+});
+
+test('surface actions expose the canonical qualified ID for response events', async () => {
+  const f = await fixture();
+  try {
+    const surfaceId = await f.createSurface('adaptive-report');
+    for (const [name, target, responseEvent] of [
+      ['adaptive-report-regenerate', 'report', 'adaptive-report-replaced'],
+      ['adaptive-report-expand', 'section-1', 'adaptive-report-expanded'],
+    ]) {
+      const response = await f.invoke('surfaceAction', {
+        surfaceId,
+        action: name,
+        target,
+        data: { protocol: 'adaptive-report/v1', surfaceId: 'adaptive-report', requestId: `request-${name}`, responseEvent },
+      });
+      assert.equal(response.ok, true);
+      const delivered = f.sent.at(-1)!.content[0].text as string;
+      const action = JSON.parse(delivered.slice(delivered.indexOf('Surface action:\n') + 'Surface action:\n'.length));
+      assert.equal(action.surfaceId, 'temporary:adaptive-report');
+      assert.equal(action.action, name);
+      assert.equal(action.target, target);
+      assert.equal(action.data.surfaceId, 'adaptive-report', 'application state is preserved but is not the return address');
+    }
+    assert.equal((await f.invoke('surfaceAction', { surfaceId: 'adaptive-report', action: 'adaptive-report-expand' })).ok, false);
   } finally { await f.cleanup(); }
 });
 

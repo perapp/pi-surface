@@ -59,11 +59,12 @@ Project files use a `surface.json` manifest:
 </html>
 ```
 
+- `surface.id` is the canonical runtime-qualified ID (`temporary:slug`, `project:slug`, or `global:slug`). Use this exact value as the return address for actions and emitted events; do not hard-code the creation slug.
 - `surface.read(path)` reads a declared dependency, returning JSON for JSON files and text otherwise.
 - `surface.watch(callback)` observes all declared dependencies; `surface.watch(path, callback)` filters an exact path. Without callbacks, dependency changes reload the page. No inference is needed to refresh data.
 - `pi.prompt(text, {attachments})` submits when idle; `pi.steer(...)` steers a running agent; `pi.followUp(...)` queues until the agent finishes. Always show failures and avoid accidental repeated inference from render/watch callbacks.
 - These promises acknowledge submission, **not the final model answer**. Use `pi.on('message_update', callback)` to observe the session stream.
-- `surface.action(action, target, data)` sends a structured request to this same session; useful for `simplify`, `expand`, `condense` and `investigate` buttons.
+- `surface.action(action, target, data)` sends a structured request to this same session; useful for `simplify`, `expand`, `condense` and `investigate` buttons. The resulting `Surface action:` message includes a top-level canonical `surfaceId`; use that ID—not a nested application-data ID—when emitting a response.
 - `surface.attach(fileInput.files)` uploads and returns attachment objects, accepted by the `attachments` option. Never supply local server paths from JavaScript. File picker, drop, and image paste already exist in the surrounding shell, so don't duplicate them unless the application needs a specific drop target.
 - `surface.on('section-updated', callback)` listens for an app-specific event. Send one from Pi with `surface` tool `{action:'emit',id,event:'section-updated',data:{...}}`. Use DOM `textContent` for untrusted text rather than `innerHTML`.
 - `pi.abort()`, `pi.getSession()`, and `pi.invoke(method, params)` expose the documented harness controls. Read [the project README](../../README.md) for the method list and limitations.
