@@ -19,6 +19,8 @@ let frameTimer;
 let refreshSequence = 0;
 let activeMessageIndex = -1;
 let followConversation = true;
+let previousWorking = false;
+let completionNeedsAttention = false;
 const uploads = [];
 const reconnectHelp = 'Return to the Pi terminal, run /surface, and open the new URL. Your draft is still here.';
 
@@ -67,22 +69,33 @@ function updateFavicon(status) {
   faviconStatus = status;
   ui.favicon.dataset.status = status;
   clearInterval(faviconTimer);
-  const color = status === 'offline' ? '#bd3b48' : '#365f8c';
+  const color = status === 'offline' ? '#bd3b48' : status === 'online' ? '#365f8c' : '#d97706';
   ui.favicon.href = faviconUrl(color);
   if (status === 'working') {
     let bright = true;
     faviconTimer = setInterval(() => { bright = !bright; ui.favicon.href = faviconUrl(color, bright ? 1 : .25); }, 650);
   }
 }
+function pageIsViewed() { return document.visibilityState === 'visible' && document.hasFocus(); }
 function updatePiMark() {
   const working = connected && state?.session?.idle === false;
-  const status = !connected || stopped ? 'offline' : working ? 'working' : 'online';
+  const status = !connected || stopped ? 'offline' : working ? 'working' : completionNeedsAttention ? 'attention' : 'online';
   ui['sidebar-toggle'].dataset.status = status;
   updateFavicon(status);
   const action = ui['sidebar-toggle'].getAttribute('aria-expanded') === 'true' ? 'Close' : 'Open';
-  ui['sidebar-toggle'].setAttribute('aria-label', `${action} conversation — ${status === 'offline' ? 'disconnected' : status}`);
+  const statusLabel = status === 'offline' ? 'disconnected' : status === 'attention' ? 'completed, not viewed' : status;
+  ui['sidebar-toggle'].setAttribute('aria-label', `${action} conversation — ${statusLabel}`);
   ui['sidebar-toggle'].title = `${action} conversation (Ctrl/⌘ B)`;
 }
+function acknowledgeCompletion() {
+  if (!completionNeedsAttention || state?.session?.idle === false || !pageIsViewed()) return;
+  completionNeedsAttention = false;
+  updatePiMark();
+}
+window.addEventListener('focus', () => requestAnimationFrame(acknowledgeCompletion));
+document.addEventListener('visibilitychange', acknowledgeCompletion);
+document.addEventListener('pointerdown', acknowledgeCompletion, { capture: true });
+document.addEventListener('keydown', acknowledgeCompletion, { capture: true });
 function connection(label, status) {
   ui.connection.textContent = label;
   ui.connection.dataset.status = status;
@@ -150,12 +163,20 @@ function applyState(next) {
   if (ui.controls.open) renderControls();
   if (ui['actions-dialog'].open) renderActions();
 }
+function directoryName(path) {
+  const value = String(path || '').replace(/[\\/]+$/, '');
+  return value.split(/[\\/]/).pop() || value || 'Pi';
+}
 function renderSession() {
   const session = state.session || {};
+  const working = session.idle === false;
+  if (previousWorking && !working) completionNeedsAttention = !pageIsViewed();
+  if (working) completionNeedsAttention = false;
+  previousWorking = working;
   ui['session-name'].textContent = session.name || 'Untitled session';
   ui['session-cwd'].textContent = session.cwd || 'Running Pi session';
-  document.title = `${session.name || 'Pi'} · Surface`;
-  ui['activity-status'].textContent = state.uiPrompt ? 'Needs terminal' : session.idle === false ? 'Working' : 'Ready';
+  document.title = `${directoryName(session.cwd)} · Pi`;
+  ui['activity-status'].textContent = state.uiPrompt ? 'Needs terminal' : working ? 'Working' : 'Ready';
   ui['model-label'].textContent = session.model?.name || session.model?.id || 'No model selected';
   const usage = session.contextUsage;
   ui['context-label'].textContent = typeof usage?.percent === 'number' ? `${Math.round(usage.percent)}% context` : '';

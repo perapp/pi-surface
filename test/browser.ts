@@ -1,7 +1,7 @@
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { browserFixture } from './browser-fixture.ts';
 import { checkMobileLayout } from './browser-layout.ts';
 
@@ -9,11 +9,13 @@ const fixture = await browserFixture();
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH ?? '/usr/bin/google-chrome', headless: true });
 const errors: string[] = [];
 try {
-  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  const page = await context.newPage();
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(fixture.server.urls[0]);
   await page.waitForFunction(() => document.querySelector('#connection')?.textContent === 'Live');
   assert.equal(new URL(page.url()).search, '');
+  assert.equal(await page.title(), `${basename(fixture.root)} · Pi`);
   assert.equal(await page.locator('#sidebar-toggle').getAttribute('data-status'), 'online');
   assert.equal(await page.locator('#sidebar').isHidden(), true);
   assert.equal(await page.locator('#prompt-panel').isHidden(), true);
@@ -158,6 +160,7 @@ try {
   await page.locator('#rename-input').fill('Renamed in browser');
   await page.getByRole('button', { name: 'Rename', exact: true }).click();
   await page.waitForFunction(() => document.querySelector('#session-name')?.textContent === 'Renamed in browser');
+  assert.equal(await page.title(), `${basename(fixture.root)} · Pi`, 'renaming the Pi session does not change the directory-based tab title');
   await page.locator('#thinking-select').selectOption('high');
   await page.waitForFunction(() => document.querySelector('#control-notice')?.textContent?.includes('Updated'));
   await page.locator('#controls-close').click();
@@ -199,8 +202,18 @@ try {
   assert.ok(actionBox && sendBox && actionBox.x + actionBox.width <= sendBox.x && sendBox.x + sendBox.width <= 320);
   await page.locator('#actions-open').click();
   assert.equal(await page.locator('#actions-run').isDisabled(), true);
+  await page.evaluate(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' }); });
   fixture.state.session.idle = true;
   fixture.server.publish({ type: 'state_changed' });
+  await page.waitForFunction(() => document.querySelector('#sidebar-toggle')?.getAttribute('data-status') === 'attention');
+  assert.equal(await page.locator('#favicon').getAttribute('data-status'), 'attention');
+  assert.equal(await page.locator('.pi-mark').evaluate(el => getComputedStyle(el).stroke), 'rgb(217, 119, 6)');
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await page.waitForFunction(() => document.querySelector('#sidebar-toggle')?.getAttribute('data-status') === 'online');
+  assert.equal(await page.locator('#favicon').getAttribute('data-status'), 'online');
   await page.waitForFunction(() => !document.querySelector<HTMLButtonElement>('#actions-run')?.disabled);
   await page.locator('#actions-controls').click();
   await page.locator('#controls-title').waitFor();
