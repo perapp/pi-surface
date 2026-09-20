@@ -6,9 +6,19 @@ A web surface for your **running Pi session**. Keep using the terminal, continue
 
 This is a Pi extension, not a second agent, RPC subprocess, or shared daemon. Each extension runtime owns its server, credentials, files, and watchers.
 
+## Install
+
+Requires Node 22+ and Pi **0.85.1+**.
+
+```sh
+pi install npm:pi-surface
+```
+
+Restart Pi, or run `/reload` in an existing session, then use `/surface` to open the authenticated browser interface. To try the package for one run without installing it, use `pi -e npm:pi-surface`. Update an installed copy with `pi update npm:pi-surface`.
+
 ## Develop from this checkout
 
-Requires Node 22+ and Pi **0.85.1+** (`@earendil-works/pi-coding-agent`).
+Development uses `@earendil-works/pi-coding-agent` **0.85.1+**.
 
 ```sh
 npm ci
