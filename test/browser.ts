@@ -261,7 +261,7 @@ try {
   fixture.server.publish({ type: 'state_changed' });
   await page.waitForFunction(() => document.querySelector('#sidebar-toggle')?.getAttribute('data-status') === 'attention');
   assert.equal(await page.locator('#favicon').getAttribute('data-status'), 'attention');
-  assert.equal(await page.locator('.pi-mark').evaluate(el => getComputedStyle(el).stroke), 'rgb(217, 119, 6)');
+  assert.equal(await page.locator('.pi-mark').evaluate(el => getComputedStyle(el).stroke), 'rgb(47, 125, 79)');
   await page.evaluate(() => {
     Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
     document.dispatchEvent(new Event('visibilitychange'));

@@ -72,7 +72,7 @@ function updateFavicon(status) {
   faviconStatus = status;
   ui.favicon.dataset.status = status;
   clearInterval(faviconTimer);
-  const color = status === 'offline' ? '#bd3b48' : status === 'online' ? '#365f8c' : '#d97706';
+  const color = status === 'offline' ? '#bd3b48' : status === 'online' ? '#365f8c' : status === 'attention' ? '#2f7d4f' : '#d97706';
   ui.favicon.href = faviconUrl(color);
   if (status === 'working') {
     let bright = true;

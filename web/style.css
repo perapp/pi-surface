@@ -3,7 +3,7 @@
   color-scheme: light;
   --ink: #243547; --muted: #6d7c8e; --line: #e2e8ef;
   --paper: #f7f9fb; --panel: #eff3f7; --white: #fff;
-  --blue: #365f8c; --blue-pale: #eaf1f8; --orange: #d97706; --red: #bd3b48;
+  --blue: #365f8c; --blue-pale: #eaf1f8; --green: #2f7d4f; --orange: #d97706; --red: #bd3b48;
   --mono: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
   --sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-family: var(--sans); color: var(--ink); background: var(--white); font-size: 14px;
@@ -43,8 +43,8 @@ h1, h2, h3, p { margin: 0; }
 .top-control svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .pi-mark { width: 24px; height: 24px; flex-shrink: 0; fill: none; stroke: var(--red); stroke-width: 3.5; stroke-linecap: square; }
 .sidebar-toggle[data-status="online"] .pi-mark { stroke: var(--blue); }
-.sidebar-toggle[data-status="working"] .pi-mark, .sidebar-toggle[data-status="attention"] .pi-mark { stroke: var(--orange); }
-.sidebar-toggle[data-status="working"] .pi-mark { animation: pi-working 1.25s ease-in-out infinite; }
+.sidebar-toggle[data-status="attention"] .pi-mark { stroke: var(--green); }
+.sidebar-toggle[data-status="working"] .pi-mark { stroke: var(--orange); animation: pi-working 1.25s ease-in-out infinite; }
 @keyframes pi-working { 0%,100% { opacity: 1; } 50% { opacity: .25; } }
 #brand-name { color: var(--ink); font-size: 18px; letter-spacing: -.6px; font-weight: 650; }
 .shell.sidebar-open .sidebar-toggle { background: var(--paper); }
