@@ -13,6 +13,9 @@ export async function browserFixture(host = '127.0.0.1', port = 0) {
     messages: [{ id: 'u1', role: 'user', content: 'This is a demo session; controls are mocked. No inference is performed.', timestamp: 1 }],
     models: [model, { ...model, id: 'second', name: 'Second demo model' }],
     commands: [
+      { name: 'new', description: 'Start a new session', source: 'builtin' },
+      { name: 'compact', description: 'Manually compact the session context', source: 'builtin' },
+      { name: 'reload', description: 'Reload extensions, skills, prompts, themes, and context files', source: 'builtin' },
       { name: 'demo', description: 'A test command', source: 'extension' },
       { name: 'skill:review', description: 'Review code with a skill', source: 'skill' },
       { name: 'summarize', description: 'Summarize with a prompt template', source: 'prompt' },

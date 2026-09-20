@@ -389,9 +389,10 @@ function connect() {
 }
 function updateComposer() {
   const busy = state?.session?.idle === false;
-  ui.send.title = busy ? 'Send steering guidance to the working Pi' : 'Send a new prompt';
+  ui.send.title = sending ? 'Sending…' : busy ? 'Send steering guidance to the working Pi' : 'Send a new prompt';
+  ui.send.setAttribute('aria-label', sending ? 'Sending' : busy ? 'Send steering guidance' : 'Send');
+  ui.send.setAttribute('aria-busy', String(sending));
   ui.send.disabled = !state || !connected || stopped || sending || uploads.some((upload) => upload.status !== 'ready');
-  ui.send.textContent = sending ? 'Sending…' : 'Send ↑';
   ui.abort.hidden = state?.session?.idle !== false;
   ui.abort.disabled = stopped || !connected;
   ui.attach.disabled = sending || stopped;
@@ -471,21 +472,33 @@ document.addEventListener('drop', (event) => {
   dragDepth = 0; ui['drop-hint'].hidden = true;
   if (event.dataTransfer?.files.length) { event.preventDefault(); attachFiles(event.dataTransfer.files); }
 });
+function parseAdvertisedCommand(value) {
+  const match = value.trim().match(/^\/([^\s]+)(?:\s+([\s\S]*))?$/);
+  if (!match || !state?.commands?.some(command => command.name === match[1])) return;
+  return { name: match[1], args: match[2] || '' };
+}
 ui.composer.addEventListener('submit', async (event) => {
   event.preventDefault();
   if (ui.send.disabled) return;
   const text = ui.prompt.value;
   if (!text.trim() && !uploads.length) { ui.prompt.focus(); return; }
   const attached = [...uploads];
+  const command = parseAdvertisedCommand(text);
   sending = true; renderUploads();
   try {
-    // Pi's steer delivery starts a normal user turn when idle and steers when busy.
-    // Let Pi decide at delivery time, not from a potentially stale browser snapshot.
-    await invoke('steer', { text, attachments: attached.map((upload) => upload.id), ...(activeSurface ? { surfaceId: activeSurface } : {}) });
+    if (command && attached.length) throw new Error('Remove attachments before running a command.');
+    if (command) {
+      const result = await invoke('command', command);
+      showNotice(`Command /${command.name} sent.${result?.note ? ` ${result.note}` : ''}`);
+    } else {
+      // Pi's steer delivery starts a normal user turn when idle and steers when busy.
+      // Let Pi decide at delivery time, not from a potentially stale browser snapshot.
+      await invoke('steer', { text, attachments: attached.map((upload) => upload.id), ...(activeSurface ? { surfaceId: activeSurface } : {}) });
+    }
     if (ui.prompt.value === text) { ui.prompt.value = ''; autoSizePrompt(); }
     for (const upload of attached) { const index = uploads.indexOf(upload); if (index >= 0) uploads.splice(index, 1); }
     queueRefresh();
-  } catch (error) { showNotice(`Message not sent. ${error.message} Your draft and attachments were kept.`); }
+  } catch (error) { showNotice(`${command ? 'Command' : 'Message'} not sent. ${error.message} Your draft and attachments were kept.`); }
   finally { sending = false; renderUploads(); ui.prompt.focus(); }
 });
 ui.prompt.addEventListener('keydown', (event) => {

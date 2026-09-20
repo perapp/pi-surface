@@ -14,6 +14,12 @@ function text(params: Record<string, unknown>, key: string, max = 100_000): stri
   return value;
 }
 const modelInfo = (model: { id: string; name: string; provider: string }) => ({ id: model.id, name: model.name, provider: model.provider });
+const browserBuiltinCommands = [
+  { name: 'new', description: 'Start a new session', source: 'builtin' },
+  { name: 'compact', description: 'Manually compact the session context', source: 'builtin' },
+  { name: 'reload', description: 'Reload extensions, skills, prompts, themes, and context files', source: 'builtin' },
+] as const;
+const browserBuiltinCommandNames = new Set(browserBuiltinCommands.map(command => command.name));
 
 type HandoffEntry = { handoff: SurfaceServerHandoff; timer: ReturnType<typeof setTimeout> };
 const serverHandoffsSymbol = Symbol.for('pi-surface.server-handoffs.v2');
@@ -95,7 +101,12 @@ export default function surfaceExtension(pi: ExtensionAPI) {
       },
       messages, activeMessage, uiPrompt: lastUiPrompt,
       models: (current.scopedModels.length ? current.scopedModels.map(item => item.model) : current.modelRegistry.getAvailable()).map(modelInfo),
-      commands: pi.getCommands().filter(command => command.name !== controlCommand).map(({ name, description, source }) => ({ name, description, source })),
+      commands: [
+        ...browserBuiltinCommands,
+        ...pi.getCommands()
+          .filter(command => command.name !== controlCommand && !browserBuiltinCommandNames.has(command.name as typeof browserBuiltinCommands[number]['name']))
+          .map(({ name, description, source }) => ({ name, description, source })),
+      ],
       tools: pi.getAllTools().map(({ name, description }) => ({ name, description, active: pi.getActiveTools().includes(name) })),
       tree: entries.map(entry => ({
         id: entry.id, parentId: entry.parentId, type: entry.type, label: sm.getLabel(entry.id), role: entry.type === 'message' ? entry.message.role : undefined,
@@ -181,9 +192,15 @@ export default function surfaceExtension(pi: ExtensionAPI) {
         return { accepted: true };
       case 'command': {
         idle(); const name = text(params, 'name', 200);
-        if (name === controlCommand || !pi.getCommands().some(command => command.name === name)) throw new HttpError(400, 'Unknown command; built-in TUI commands need dedicated controls');
         const args = params.args ?? '';
         if (typeof args !== 'string' || args.length > 100_000) throw new HttpError(400, 'Invalid command arguments');
+        if (browserBuiltinCommandNames.has(name as typeof browserBuiltinCommands[number]['name'])) {
+          if ((name === 'new' || name === 'reload') && args.trim()) throw new HttpError(400, `/${name} does not accept arguments`);
+          if (name === 'new') return invoke('newSession', {});
+          if (name === 'compact') return invoke('compact', { instructions: args.trim() || undefined });
+          return invoke('reload', {});
+        }
+        if (name === controlCommand || !pi.getCommands().some(command => command.name === name)) throw new HttpError(400, 'Unknown command');
         pi.sendUserMessage(`/${name}${args ? ` ${args}` : ''}`, { expandPromptTemplates: true, deliverAs: 'followUp' });
         return { accepted: true, note: 'Commands that open terminal dialogs still require the TUI.' };
       }

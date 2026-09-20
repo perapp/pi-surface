@@ -63,6 +63,11 @@ try {
   await page.locator('#prompt-quick-toggle').click();
   assert.equal(await page.locator('#prompt-panel').isVisible(), true);
   assert.equal(await page.locator('#prompt-quick-toggle').getAttribute('aria-pressed'), 'true');
+  for (const [id, label] of [['attach', 'Attach files'], ['abort', 'Abort'], ['actions-open', 'Commands'], ['send', 'Send']]) {
+    assert.equal(await page.locator(`#${id}`).getAttribute('aria-label'), label);
+    assert.equal(await page.locator(`#${id} svg`).count(), 1);
+    assert.equal((await page.locator(`#${id}`).textContent())?.trim(), '');
+  }
   await page.locator('#prompt-quick-toggle').click();
   assert.equal(await page.locator('#prompt-panel').isHidden(), true);
   const defaultGeometry = await page.evaluate(() => {
@@ -135,8 +140,24 @@ try {
   fixture.server.publish({ type: 'surface_event', surfaceId: fixture.surface.id, event: 'test-update', data: { text: 'Updated without HTML regeneration' } });
   await frame.getByText('Updated without HTML regeneration').waitFor();
 
+  await page.locator('#prompt').fill('/demo typed argument');
+  await page.locator('#prompt').press('Enter');
+  await page.waitForFunction(() => document.querySelector<HTMLTextAreaElement>('#prompt')?.value === '');
+  assert.deepEqual(fixture.calls.at(-1), { method: 'command', params: { name: 'demo', args: 'typed argument' } });
+  await page.locator('#prompt').fill('/new');
+  await page.locator('#prompt').press('Enter');
+  await page.waitForFunction(() => document.querySelector<HTMLTextAreaElement>('#prompt')?.value === '');
+  assert.deepEqual(fixture.calls.at(-1), { method: 'command', params: { name: 'new', args: '' } });
+  await page.locator('#prompt').fill('/not-advertised');
+  await page.locator('#prompt').press('Enter');
+  await page.waitForFunction(() => document.querySelector<HTMLTextAreaElement>('#prompt')?.value === '');
+  assert.equal(fixture.calls.at(-1)?.method, 'steer', 'unknown slash text remains an ordinary prompt');
+  await page.locator('#prompt').fill('Draft survives command picker use');
+
   await page.locator('#actions-open').click();
-  assert.equal(await page.locator('#actions-select option').count(), 3);
+  assert.equal(await page.locator('#actions-select option').count(), 6);
+  await page.locator('#actions-search').fill('/new');
+  assert.equal(await page.locator('#actions-select').inputValue(), 'new');
   await page.locator('#actions-search').fill('no matching command');
   assert.equal(await page.locator('#actions-run').isDisabled(), true);
   await page.locator('#actions-search').fill('review');
@@ -152,7 +173,7 @@ try {
   await page.locator('#actions-run').click();
   await page.waitForFunction(() => !document.querySelector<HTMLDialogElement>('#actions-dialog')?.open);
   assert.deepEqual(fixture.calls.at(-1), { method: 'command', params: { name: 'demo', args: 'src/index.ts --detail' } });
-  assert.equal(await page.locator('#prompt').inputValue(), 'Draft survives data updates');
+  assert.equal(await page.locator('#prompt').inputValue(), 'Draft survives command picker use');
   await page.locator('#notice-dismiss').click();
 
   await page.locator('#file-input').setInputFiles({ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('test upload') });
@@ -226,9 +247,13 @@ try {
   assert.equal(fixture.calls.at(-1)?.params.text, 'Steer the working Pi');
   await page.setViewportSize({ width: 320, height: 640 });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  const attachBox = await page.locator('#attach').boundingBox();
+  const abortBox = await page.locator('#abort').boundingBox();
   const actionBox = await page.locator('#actions-open').boundingBox();
   const sendBox = await page.locator('#send').boundingBox();
-  assert.ok(actionBox && sendBox && actionBox.x + actionBox.width <= sendBox.x && sendBox.x + sendBox.width <= 320);
+  assert.ok(attachBox && abortBox && actionBox && sendBox);
+  assert.ok(Math.abs(attachBox.y - sendBox.y) <= 2, 'composer controls stay on one row at phone width');
+  assert.ok(abortBox.x + abortBox.width <= actionBox.x && actionBox.x + actionBox.width <= sendBox.x && sendBox.x + sendBox.width <= 320);
   await page.locator('#actions-open').click();
   assert.equal(await page.locator('#actions-run').isDisabled(), true);
   await page.evaluate(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' }); });

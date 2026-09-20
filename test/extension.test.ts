@@ -45,13 +45,14 @@ async function fixture(options: { mode?: 'tui' | 'rpc'; host?: string } = {}) {
     isIdle: () => !busy, abort: () => { aborted = true; busy = false; }, hasPendingMessages: () => false,
     sessionManager: sm, model, modelRegistry: { getAvailable: () => [model], find: (provider: string, id: string) => provider === model.provider && id === model.id ? model : undefined }, scopedModels: [],
     getContextUsage: () => ({ tokens: 100, contextWindow: 10000, percent: 1 }),
-    compact: () => { sessionActions.push('compact'); }, waitForIdle: async () => {},
+    compact: (compactOptions: any) => { sessionActions.push(`compact:${compactOptions.customInstructions ?? ''}`); compactOptions.onComplete?.(); }, waitForIdle: async () => {},
     newSession: async () => { sessionActions.push('newSession'); return { cancelled: true }; },
     fork: async (id: string) => { sessionActions.push(`fork:${id}`); return { cancelled: true }; },
     navigateTree: async (id: string) => { sessionActions.push(`navigateTree:${id}`); return { cancelled: false }; },
     reload: async () => { sessionActions.push('reload'); },
     ui: { notify: (text: string) => notices.push(text), setStatus: () => {}, setWidget: (_key: string, value: unknown) => widgets.push(value) },
   } as unknown as ExtensionCommandContext;
+  commands.set('demo', { description: 'A test command', handler: () => {} });
   surfaceExtension(api);
   const emit = async (name: string, event: unknown = { type: name }) => {
     for (const handler of events.get(name) ?? []) await handler(event, context);
@@ -85,6 +86,7 @@ test('adapter uses same session, native user messages, busy delivery, validation
     assert.equal(state.session.id, f.sm.getSessionId());
     assert.match(state.messages[0].content, /hello from terminal/);
     assert.ok(!state.commands.some((command: any) => command.name.startsWith('surface-control-')));
+    assert.deepEqual(state.commands.filter((command: any) => command.source === 'builtin').map((command: any) => command.name), ['new', 'compact', 'reload']);
     assert.equal((await f.invoke('prompt', { text: 'hello from phone' })).ok, true);
     assert.match(f.sent.at(-1)!.content[0].text, /^\[via web\]\nhello from phone/);
     f.setBusy(true);
@@ -104,6 +106,9 @@ test('adapter uses same session, native user messages, busy delivery, validation
     assert.equal(updated.session.name, 'Renamed from phone'); assert.equal(updated.session.thinkingLevel, 'high');
     assert.equal(updated.tools.filter((tool: any) => tool.active).length, 2);
     assert.equal((await f.invoke('setActiveTools', { names: ['exec-anything'] })).status, 400);
+    assert.equal((await f.invoke('command', { name: 'demo', args: 'src/index.ts' })).ok, true);
+    assert.equal(f.sent.at(-1)!.content, '/demo src/index.ts');
+    assert.equal(f.sent.at(-1)!.options.expandPromptTemplates, true);
     assert.equal((await f.invoke('command', { name: 'settings' })).status, 400);
     assert.equal((await f.invoke('eval', { code: 'bad' })).status, 400);
   } finally { await f.cleanup(); }
@@ -174,9 +179,15 @@ test('session operations are acknowledged then dispatched through a real command
     await new Promise(resolve => setTimeout(resolve, 80));
     assert.ok(f.sessionActions.includes('navigateTree:' + f.sm.getLeafId()));
     assert.equal(f.sent.at(-1)!.options.expandPromptTemplates, true);
-    assert.equal((await f.invoke('newSession')).ok, true);
+    assert.equal((await f.invoke('command', { name: 'compact', args: 'Preserve decisions' })).ok, true);
+    assert.ok(f.sessionActions.includes('compact:Preserve decisions'));
+    assert.equal((await f.invoke('command', { name: 'new' })).ok, true);
     await new Promise(resolve => setTimeout(resolve, 80));
     assert.ok(f.sessionActions.includes('newSession'));
+    assert.equal((await f.invoke('command', { name: 'new', args: 'unexpected' })).status, 400);
+    assert.equal((await f.invoke('command', { name: 'reload' })).ok, true);
+    await new Promise(resolve => setTimeout(resolve, 80));
+    assert.ok(f.sessionActions.includes('reload'));
   } finally { await f.cleanup(); }
 });
 
