@@ -32,7 +32,8 @@
   "scripts": {
     "check": "tsc --noEmit",
     "test": "tsx --test test/*.test.ts",
-    "test:browser": "tsx test/browser.ts"
+    "test:browser": "tsx test/browser.ts",
+    "prepublishOnly": "npm run check && npm test && npm run test:browser"
   },
   "dependencies": {
     "chokidar": "^3.6.0",
