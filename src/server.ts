@@ -274,7 +274,7 @@ export class SurfaceServer {
     throw new HttpError(404, 'Not found');
   }
 
-  async preserveForRestart(reason: string, preserveRuntime = reason === 'reload'): Promise<SurfaceServerHandoff> {
+  async preserveForRestart(reason: string, preserveRuntime = reason === 'reload' || reason === 'fork'): Promise<SurfaceServerHandoff> {
     if (this.closing) throw new Error('Pi Surface is already closing');
     this.closing = true;
     clearInterval(this.heartbeat);

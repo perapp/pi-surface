@@ -335,7 +335,7 @@ export default function surfaceExtension(pi: ExtensionAPI) {
     clearTimeout(controlTimer); controls.clear();
     if (['reload', 'new', 'resume', 'fork'].includes(event.reason) && server) {
       const previous = server; server = undefined;
-      stashHandoff(event.reason, current, await previous.preserveForRestart(event.reason, event.reason === 'reload'));
+      stashHandoff(event.reason, current, await previous.preserveForRestart(event.reason));
     } else await stop(event.reason);
     context = undefined;
   });

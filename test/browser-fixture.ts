@@ -55,9 +55,9 @@ document.querySelector('#ask').onclick=()=>pi.followUp('Investigate this report'
     return {
       root, get server() { return server; }, state, surface, calls, failNext: () => { failNext = true; },
       restartSession: async (reason = 'new') => {
-        const handoff = await server.preserveForRestart(reason, reason === 'reload');
+        const handoff = await server.preserveForRestart(reason);
         state.session.id = `${reason}-session`;
-        state.session.name = reason === 'reload' ? state.session.name : 'Replacement session';
+        state.session.name = reason === 'reload' ? state.session.name : reason === 'fork' ? 'Forked session' : 'New session';
         state.messages = reason === 'reload' ? state.messages : [];
         server = new SurfaceServer(serverOptions, handoff);
         await server.start();

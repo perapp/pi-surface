@@ -167,7 +167,7 @@ test('session replacement handoff preserves origin and authentication but resets
     const reader = events.body!.getReader(); await reader.read();
     const restarting = reader.read();
     const directory = f.server.directory;
-    const handoff = await f.server.preserveForRestart('new', false);
+    const handoff = await f.server.preserveForRestart('new');
     assert.match(new TextDecoder().decode((await restarting).value), /"server_reloading","reason":"new"/);
     assert.equal(handoff.directory, undefined);
     await assert.rejects(stat(directory));

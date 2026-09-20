@@ -249,9 +249,15 @@ try {
   await page.locator('#controls-close').click();
   await page.locator('#prompt').fill('Still here after session replacement');
   await checkMobileLayout(browser, fixture.server.urls[0]);
-  await fixture.restartSession('new');
+  await fixture.restartSession('fork');
+  await page.waitForFunction(() => document.querySelector('#session-name')?.textContent === 'Forked session');
   await page.waitForFunction(() => document.querySelector('#connection')?.textContent === 'Live');
-  await page.waitForFunction(() => document.querySelector('#session-name')?.textContent === 'Replacement session');
+  assert.equal(await page.locator('#prompt').inputValue(), 'Still here after session replacement');
+  assert.equal(await page.locator('#surface-count').textContent(), '1 surface');
+  await frame.getByText('42 passed', { exact: true }).waitFor();
+  await fixture.restartSession('new');
+  await page.waitForFunction(() => document.querySelector('#session-name')?.textContent === 'New session');
+  await page.waitForFunction(() => document.querySelector('#connection')?.textContent === 'Live');
   assert.equal(await page.locator('#prompt').inputValue(), 'Still here after session replacement');
   assert.equal(await page.locator('#send').isDisabled(), false);
   assert.equal(await page.locator('#favicon').getAttribute('data-status'), 'online');
