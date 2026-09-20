@@ -4,20 +4,49 @@
   "description": "Interactive, reactive web surfaces connected to your running Pi session",
   "type": "module",
   "license": "MIT",
-  "keywords": ["pi-package"],
-  "files": ["src", "web", "skills", "prompts", "README.md"],
-  "pi": { "extensions": ["./src/index.ts"], "skills": ["./skills"], "prompts": ["./prompts"] },
-  "engines": { "node": ">=22" },
+  "keywords": [
+    "pi-package"
+  ],
+  "files": [
+    "src",
+    "web",
+    "skills",
+    "prompts",
+    "README.md"
+  ],
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ],
+    "skills": [
+      "./skills"
+    ],
+    "prompts": [
+      "./prompts"
+    ],
+    "image": "https://raw.githubusercontent.com/perapp/pi-surface/main/docs/pi-surface.png"
+  },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "check": "tsc --noEmit",
     "test": "tsx --test test/*.test.ts",
     "test:browser": "tsx test/browser.ts"
   },
-  "dependencies": { "chokidar": "^3.6.0", "picomatch": "^4.0.3", "qrcode": "^1.5.4" },
-  "peerDependencies": { "@earendil-works/pi-coding-agent": "*", "@earendil-works/pi-ai": "*", "typebox": "*" },
+  "dependencies": {
+    "chokidar": "^3.6.0",
+    "picomatch": "^4.0.3",
+    "qrcode": "^1.5.4"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "0.85.1",
     "@earendil-works/pi-ai": "0.85.1",
+    "@earendil-works/pi-coding-agent": "0.85.1",
     "@types/node": "^24.0.0",
     "@types/picomatch": "^4.0.0",
     "@types/qrcode": "^1.5.5",
@@ -25,5 +54,14 @@
     "tsx": "^4.20.0",
     "typebox": "^1.0.0",
     "typescript": "^5.9.2"
+  },
+  "author": "Per Appelgren <per@appgren.se> (https://github.com/perapp)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/perapp/pi-surface.git"
+  },
+  "homepage": "https://github.com/perapp/pi-surface#readme",
+  "bugs": {
+    "url": "https://github.com/perapp/pi-surface/issues"
   }
 }

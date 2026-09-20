@@ -2,6 +2,8 @@
 
 A web surface for your **running Pi session**. Keep using the terminal, continue from your phone, and let Pi create interactive reports, dashboards, forms, and small applications in the browser.
 
+![Pi Surface browser interface](https://raw.githubusercontent.com/perapp/pi-surface/main/docs/pi-surface.png)
+
 This is a Pi extension, not a second agent, RPC subprocess, or shared daemon. Each extension runtime owns its server, credentials, files, and watchers.
 
 ## Develop from this checkout
