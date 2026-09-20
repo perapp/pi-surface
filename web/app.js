@@ -318,10 +318,12 @@ function renderSurfaces() {
 ui['surface-frame'].addEventListener('load', () => {
   clearTimeout(frameTimer);
   ui['surface-loading'].hidden = true;
-  // Same origin also lets us recognize a failed auth response inside the frame.
+  // Same origin also lets us recognize a failed auth response and handle shell
+  // shortcuts while focus is inside the surface.
   try {
     const doc = ui['surface-frame'].contentDocument;
     if (doc?.body?.textContent?.trim().match(/^(unauthorized|authentication required)$/i)) closeConnection('The surface is no longer authenticated.');
+    doc?.addEventListener('keydown', handleGlobalShortcut, { capture: true });
   } catch { /* A trusted surface may navigate elsewhere. */ }
 });
 function handleEvent(event) {
@@ -578,7 +580,7 @@ function autoSizePrompt() {
 ui.prompt.addEventListener('input', autoSizePrompt);
 autoSizePrompt();
 
-document.addEventListener('keydown', (event) => {
+function handleGlobalShortcut(event) {
   const dialogOpen = ui.controls.open || ui['actions-dialog'].open;
   if (event.key === 'Escape') {
     if (dialogOpen) return; // Native dialog handling takes priority.
@@ -594,7 +596,8 @@ document.addEventListener('keydown', (event) => {
     event.preventDefault();
     togglePrompt(ui['prompt-panel'].hidden);
   }
-});
+}
+document.addEventListener('keydown', handleGlobalShortcut);
 
 // Composer command picker: use the same advertised commands and validated dispatch
 // as Session controls. Never pass arbitrary slash text to the model as a command.

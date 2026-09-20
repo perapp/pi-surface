@@ -40,6 +40,20 @@ try {
   assert.equal(await page.locator('#prompt-panel').isVisible(), true);
   await page.keyboard.press('Escape');
   assert.equal(await page.locator('#prompt-panel').isHidden(), true);
+  const frame = page.frameLocator('#surface-frame');
+  await frame.getByText('3 passed', { exact: true }).waitFor();
+  await frame.getByRole('heading', { name: 'Reactive report' }).click();
+  assert.equal(await page.locator('#surface-frame').evaluate(el => el === document.activeElement), true);
+  await page.keyboard.press('Control+b');
+  assert.equal(await page.locator('#sidebar').isVisible(), true, 'conversation shortcut works from inside the surface');
+  await page.keyboard.press('Control+b');
+  assert.equal(await page.locator('#sidebar').isHidden(), true, 'conversation shortcut toggles from inside the surface');
+  await frame.getByRole('heading', { name: 'Reactive report' }).click();
+  await page.keyboard.press('Control+/');
+  assert.equal(await page.locator('#prompt-panel').isVisible(), true, 'prompt shortcut works from inside the surface');
+  await frame.getByRole('heading', { name: 'Reactive report' }).click();
+  await page.keyboard.press('Escape');
+  assert.equal(await page.locator('#prompt-panel').isHidden(), true, 'Escape works from inside the surface');
   await page.locator('#prompt-quick-toggle').click();
   assert.equal(await page.locator('#prompt-panel').isVisible(), true);
   assert.equal(await page.locator('#prompt-quick-toggle').getAttribute('aria-pressed'), 'true');
@@ -85,7 +99,6 @@ try {
   assert.ok(Math.abs(elevenRows.height - tenRowHeight) <= 2, 'prompt stops growing after ten rows');
   assert.ok(elevenRows.scrollHeight > elevenRows.clientHeight);
   assert.equal(elevenRows.overflow, 'auto');
-  const frame = page.frameLocator('#surface-frame');
   await frame.getByText('3 passed', { exact: true }).waitFor();
   assert.equal(await page.locator('#composer-model-select').isVisible(), true);
   assert.equal(await page.locator('#composer-thinking-select').isVisible(), true);
