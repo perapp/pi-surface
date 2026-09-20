@@ -35,12 +35,59 @@
         <main class="workspace" aria-label="Surface workspace">
         <section id="surface-stage" class="surface-stage" aria-label="Active surface">
           <div id="surface-empty" class="surface-empty">
-            <div class="empty-diagram" aria-hidden="true"><span class="diagram-tab">surface.html</span><div class="diagram-pane"><span>π</span><i></i><i></i><i></i></div></div>
-            <p class="eyebrow">Your working surface</p>
-            <h1>Give this session a view.</h1>
-            <p>Ask Pi to create a surface: a dashboard, a sketch, a form, or a tool for the task at hand. It opens here while your conversation stays connected.</p>
-            <button id="example-prompt" class="secondary">Draft a surface request <span aria-hidden="true">↗</span></button>
-            <p class="empty-note">Already have one? Ask Pi to open it with its surface tools.</p>
+            <header class="empty-intro">
+              <p class="eyebrow">Your working surface</p>
+              <h1>Give this session a view.</h1>
+              <p>Turn the current conversation, project, or idea into something you can explore—not just read.</p>
+            </header>
+            <section class="surface-starters" aria-labelledby="surface-starters-title">
+              <div class="starter-heading">
+                <h2 id="surface-starters-title">Start with an idea</h2>
+                <p>Choose one to edit, or press play to run it now.</p>
+              </div>
+              <div class="starter-grid">
+                <article class="starter-card" data-kind="report">
+                  <div class="starter-card-heading">
+                    <h3>Understand black holes in five minutes</h3>
+                    <button class="starter-run" type="button" aria-label="Run the black holes adaptive report prompt" title="Run prompt now"><span aria-hidden="true">▶</span></button>
+                  </div>
+                  <button class="starter-fill" type="button" aria-label="Edit the black holes adaptive report prompt">
+                    <code class="starter-prompt">Create and open a 5-minute adaptive report surface about black holes for a general audience. Include controls for reading level and reading time, plus Tell me more actions for each section.</code>
+                  </button>
+                </article>
+                <article class="starter-card" data-kind="brain">
+                  <div class="starter-card-heading">
+                    <h3>Build a second brain for this project</h3>
+                    <button class="starter-run" type="button" aria-label="Run the project second-brain prompt" title="Run prompt now"><span aria-hidden="true">▶</span></button>
+                  </div>
+                  <button class="starter-fill" type="button" aria-label="Edit the project second-brain prompt">
+                    <code class="starter-prompt">Create and open a second-brain surface for this project. Inspect its README, documentation, recent Git history, and TODOs. Organize what you learn into a searchable knowledge map of concepts, architecture, decisions, open questions, and next actions. Add buttons that ask Pi to explain or connect selected ideas.</code>
+                  </button>
+                </article>
+                <article class="starter-card" data-kind="command">
+                  <div class="starter-card-heading">
+                    <h3>See this repository at a glance</h3>
+                    <button class="starter-run" type="button" aria-label="Run the project command-center prompt" title="Run prompt now"><span aria-hidden="true">▶</span></button>
+                  </div>
+                  <button class="starter-fill" type="button" aria-label="Edit the project command-center prompt">
+                    <code class="starter-prompt">Create and open a live project command-center surface for this repository. Show its architecture, recent changes, test commands and results, TODOs, risks, and recommended next steps. Make filtering local and add an action to ask Pi to investigate a selected risk.</code>
+                  </button>
+                </article>
+                <article class="starter-card" data-kind="playground">
+                  <div class="starter-card-heading">
+                    <h3>Experiment with orbital mechanics</h3>
+                    <button class="starter-run" type="button" aria-label="Run the orbital-mechanics playground prompt" title="Run prompt now"><span aria-hidden="true">▶</span></button>
+                  </div>
+                  <button class="starter-fill" type="button" aria-label="Edit the orbital-mechanics playground prompt">
+                    <code class="starter-prompt">Create and open an interactive orbital-mechanics playground. Let me adjust orbital velocity and starting distance, animate the orbit, visualize the trajectory, and explain what changes—entirely in the surface.</code>
+                  </button>
+                </article>
+              </div>
+            </section>
+            <div class="empty-footer">
+              <button id="example-prompt" class="secondary" type="button">Write your own prompt <span aria-hidden="true">↗</span></button>
+              <p class="empty-note">Already have a surface? Ask Pi to open it with its surface tools.</p>
+            </div>
           </div>
           <div id="surface-loading" class="surface-loading" role="status" hidden>Loading surface…</div>
           <!-- Intentionally unsandboxed: generated surfaces have the user's full, same-origin session trust. -->

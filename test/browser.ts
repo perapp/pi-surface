@@ -256,6 +256,15 @@ try {
   assert.equal(await page.locator('#send').isDisabled(), false);
   assert.equal(await page.locator('#favicon').getAttribute('data-status'), 'online');
   assert.equal(await page.locator('#surface-count').textContent(), '0 surfaces');
+  assert.equal(await page.locator('.starter-card').count(), 4);
+  const reportPrompt = (await page.locator('.starter-card[data-kind="report"] .starter-prompt').textContent())!.trim();
+  await page.locator('.starter-card[data-kind="report"] .starter-fill').click();
+  assert.equal(await page.locator('#prompt').inputValue(), reportPrompt, 'the card shows the exact editable prompt');
+  const brainPrompt = (await page.locator('.starter-card[data-kind="brain"] .starter-prompt').textContent())!.trim();
+  await page.locator('.starter-card[data-kind="brain"] .starter-run').click();
+  await page.waitForFunction(() => document.querySelector('#messages')?.textContent?.includes('Create and open a second-brain surface'));
+  assert.equal(fixture.calls.at(-1)?.method, 'steer');
+  assert.equal(fixture.calls.at(-1)?.params.text, brainPrompt, 'play sends the exact prompt displayed on the card');
   await fixture.server.close('quit');
   await page.getByText(/quit Return to the Pi terminal/).waitFor();
   assert.equal(await page.locator('#send').isDisabled(), true);

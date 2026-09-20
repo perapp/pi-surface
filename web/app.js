@@ -8,6 +8,7 @@ let frameKey = '';
 let stream = null;
 let stopped = false;
 let sending = false;
+let runningStarter = null;
 let actionRunning = false;
 let surfaceConnectionInfo = null;
 let surfaceQrVisible = false;
@@ -399,6 +400,7 @@ function updateComposer() {
   ui['composer-thinking-select'].disabled = !state || !connected || stopped || busy;
   ui['actions-open'].disabled = !state || !connected || stopped;
   ui['actions-run'].disabled = actionRunning || !connected || stopped || !ui['actions-select'].value || state?.session?.idle === false || !!state?.session?.pending;
+  updateStarterPrompts();
 }
 function renderUploads() {
   ui.attachments.replaceChildren(...uploads.map((upload) => {
@@ -516,10 +518,53 @@ function togglePrompt(open, focus = true) {
   if (open) requestAnimationFrame(autoSizePrompt);
   if (focus && open) ui.prompt.focus();
 }
-ui['example-prompt'].addEventListener('click', () => {
+function updateStarterPrompts() {
+  const unavailable = !state || !connected || stopped || sending || state?.session?.idle === false;
+  document.querySelectorAll('.starter-run').forEach((button) => {
+    button.disabled = unavailable;
+    const isRunning = button === runningStarter;
+    button.closest('.starter-card')?.toggleAttribute('data-running', isRunning);
+    button.setAttribute('aria-busy', String(isRunning));
+    button.title = isRunning ? 'Sending prompt…' : unavailable ? 'Available when Pi is ready' : 'Run prompt now';
+  });
+  document.querySelectorAll('.starter-fill').forEach((button) => { button.disabled = stopped; });
+}
+function starterPrompt(button) {
+  return button.querySelector('.starter-prompt')?.textContent?.trim() || '';
+}
+function fillStarterPrompt(button) {
   togglePrompt(true, false);
-  if (!ui.prompt.value) ui.prompt.value = 'Create and open an interactive surface for the task we are working on.';
+  ui.prompt.value = starterPrompt(button);
+  autoSizePrompt();
   ui.prompt.focus();
+}
+document.querySelectorAll('.starter-fill').forEach((button) => {
+  button.addEventListener('click', () => fillStarterPrompt(button));
+});
+document.querySelectorAll('.starter-run').forEach((button) => {
+  button.addEventListener('click', async () => {
+    if (button.disabled) return;
+    const fillButton = button.closest('.starter-card')?.querySelector('.starter-fill');
+    const text = fillButton ? starterPrompt(fillButton) : '';
+    if (!text) return;
+    runningStarter = button;
+    sending = true;
+    updateComposer();
+    try {
+      await invoke('steer', { text });
+      queueRefresh();
+    } catch (error) {
+      fillStarterPrompt(fillButton);
+      showNotice(`Prompt not sent. ${error.message} It is ready to edit and retry.`);
+    } finally {
+      sending = false;
+      runningStarter = null;
+      updateComposer();
+    }
+  });
+});
+ui['example-prompt'].addEventListener('click', () => {
+  togglePrompt(true);
 });
 ui['sidebar-toggle'].addEventListener('click', () => toggleSidebar(ui['sidebar-toggle'].getAttribute('aria-expanded') !== 'true'));
 ui['sidebar-backdrop'].addEventListener('click', () => toggleSidebar(false));
