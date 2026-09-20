@@ -90,6 +90,28 @@ Project surfaces are only loaded in trusted projects. Scope-qualified IDs (e.g. 
 
 Ask Pi: **“Show these test results as a reactive surface.”** The bundled `pi-surface` skill teaches the tools and browser API.
 
+## Adaptive Report Surfaces
+
+An **Adaptive Report Surface** is a polished, long-form explainer that the reader can reshape through the same Pi session. Its opening controls can regenerate the complete report at a different reading level or target reading time, while each section can request newly generated detail through **Tell me more**.
+
+Ask naturally:
+
+```text
+Give me a report surface on black holes.
+Create an adaptive report on the Linux kernel for a technical audience.
+```
+
+Or use the bundled prompt template:
+
+```text
+/report-surface black holes
+/report-surface "the Linux kernel" "focus on scheduling and memory management"
+```
+
+The `report-surface` skill defines the reusable `adaptive-report/v1` action/event contract. A report sends `adaptive-report-regenerate` or `adaptive-report-expand` with its current state and a request ID; Pi returns the generated result with `surface emit`. Standard top controls use a **Technical depth** dropdown (Plain language, General audience, Technical, Expert), a **Reading time** dropdown (2, 5, 10, or 15 minutes), and one **Regenerate report** button that submits both choices in a single inference. Whole-report regeneration may change the section count instead of merely padding or truncating prose.
+
+Action submission only acknowledges that generation was queued. The report keeps an accessible loading state until the matching event arrives, rejects stale request IDs, and recovers on timeout. Custom events are transient; durable reports should keep canonical state in a declared watched file when they must survive reloads.
+
 ## Browser API (protocol 1)
 
 The server injects `/bridge.js` before your app scripts. Both `window.pi` and `window.surface.pi` refer to the same bridge.

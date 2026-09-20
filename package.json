@@ -5,8 +5,8 @@
   "type": "module",
   "license": "MIT",
   "keywords": ["pi-package"],
-  "files": ["src", "web", "skills", "README.md"],
-  "pi": { "extensions": ["./src/index.ts"], "skills": ["./skills"] },
+  "files": ["src", "web", "skills", "prompts", "README.md"],
+  "pi": { "extensions": ["./src/index.ts"], "skills": ["./skills"], "prompts": ["./prompts"] },
   "engines": { "node": ">=22" },
   "scripts": {
     "check": "tsc --noEmit",

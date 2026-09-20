@@ -325,7 +325,7 @@ export default function surfaceExtension(pi: ExtensionAPI) {
     name: 'surface', label: 'Surface',
     description: 'Create/open interactive web surfaces connected to this Pi session. Actions: list, create (temporary HTML), open, promote (save to project/global), emit (push data to a live surface). Never returns auth tokens. Tool text limited to 50KB/2000 lines. Edit the returned directory with normal file tools for hot reload.',
     promptSnippet: 'Create and update reactive browser applications for this Pi session',
-    promptGuidelines: ['Use surface to display interactive reports or applications; load the pi-surface skill for the browser API. Declare mutable file dependencies in watch (paths relative to cwd); updates must not require inference. Preserve normal write-authorization rules when creating or promoting surfaces.'],
+    promptGuidelines: ['Use surface to display interactive reports or applications; load the pi-surface skill for the browser API, and load the report-surface skill for an Adaptive Report Surface with inference-driven reading level, reading time, and section expansion. Declare mutable file dependencies in watch (paths relative to cwd); updates must not require inference. Preserve normal write-authorization rules when creating or promoting surfaces.'],
     parameters: Type.Object({
       action: StringEnum(['list', 'create', 'open', 'promote', 'emit'] as const),
       id: Type.Optional(Type.String()), name: Type.Optional(Type.String()), html: Type.Optional(Type.String()),
