@@ -20,9 +20,10 @@ export async function browserFixture(host = '127.0.0.1', port = 0) {
     tree: [{ id: 'u1', parentId: null, type: 'message', role: 'user', text: 'user: Demo request' }], capabilities: { sessionControl: true },
   };
   let failNext = false;
-  const server: SurfaceServer = new SurfaceServer({ cwd: root, trusted: true, globalRoot: join(root, 'global'), host, port,
+  let server: SurfaceServer;
+  const serverOptions = { cwd: root, trusted: true, globalRoot: join(root, 'global'), host, port,
     state: () => state,
-    invoke: (method, params): unknown => {
+    invoke: (method: string, params: Record<string, unknown>): unknown => {
       if (failNext) { failNext = false; throw new Error('Simulated failure'); }
       calls.push({ method, params });
       if (['prompt', 'steer', 'followUp'].includes(method)) {
@@ -41,7 +42,8 @@ export async function browserFixture(host = '127.0.0.1', port = 0) {
       }
       server.publish({ type: 'state_changed' }); return { accepted: true };
     },
-  });
+  };
+  server = new SurfaceServer(serverOptions);
   try {
     await server.start();
     await writeFile(join(root, 'results.json'), '{"passed":3}');
@@ -50,6 +52,17 @@ async function refresh(){const value=await surface.read('results.json');document
 surface.watch(refresh);refresh();surface.on('test-update',data=>document.querySelector('#result').textContent=data.text);
 document.querySelector('#ask').onclick=()=>pi.followUp('Investigate this report');
 </script></body></html>` });
-    return { root, server, state, surface, calls, failNext: () => { failNext = true; }, close: async () => { await server.close(); await rm(root, { recursive: true, force: true }); } };
+    return {
+      root, get server() { return server; }, state, surface, calls, failNext: () => { failNext = true; },
+      restartSession: async (reason = 'new') => {
+        const handoff = await server.preserveForRestart(reason, reason === 'reload');
+        state.session.id = `${reason}-session`;
+        state.session.name = reason === 'reload' ? state.session.name : 'Replacement session';
+        state.messages = reason === 'reload' ? state.messages : [];
+        server = new SurfaceServer(serverOptions, handoff);
+        await server.start();
+      },
+      close: async () => { await server.close(); await rm(root, { recursive: true, force: true }); },
+    };
   } catch (error) { await server.close(); await rm(root, { recursive: true, force: true }); throw error; }
 }

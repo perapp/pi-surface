@@ -132,7 +132,7 @@ test('reload handoff preserves origin, temporary surfaces, authentication and at
     const reader = events.body!.getReader(); await reader.read();
     const reloading = reader.read();
     const directory = f.server.directory;
-    const handoff = await f.server.preserveForReload();
+    const handoff = await f.server.preserveForRestart('reload');
     assert.match(new TextDecoder().decode((await reloading).value), /server_reloading/);
     assert.equal((await stat(directory)).isDirectory(), true);
     await f.server.close();
@@ -153,6 +153,35 @@ test('reload handoff preserves origin, temporary surfaces, authentication and at
     assert.equal((await fetch(f.base + '/api/upload/' + uploaded.id, { method: 'DELETE', headers: uploadHeaders })).status, 409);
     await replacement.close(); replacement = undefined;
     await assert.rejects(stat(directory));
+  } finally { await replacement?.close(); await f.cleanup(); }
+});
+
+test('session replacement handoff preserves origin and authentication but resets temporary state', async () => {
+  const f = await fixture();
+  let replacement: SurfaceServer | undefined;
+  try {
+    await f.server.store.create({ id: 'old-session-report', name: 'Old report', html: '<p>old</p>' });
+    const uploadHeaders = { cookie: f.cookie, 'x-pi-surface': '1', 'x-file-name': 'old.txt' };
+    const uploaded = await (await fetch(f.base + '/api/upload', { method: 'POST', headers: uploadHeaders, body: 'old session' })).json();
+    const events = await fetch(f.base + '/api/events', { headers: { cookie: f.cookie } });
+    const reader = events.body!.getReader(); await reader.read();
+    const restarting = reader.read();
+    const directory = f.server.directory;
+    const handoff = await f.server.preserveForRestart('new', false);
+    assert.match(new TextDecoder().decode((await restarting).value), /"server_reloading","reason":"new"/);
+    assert.equal(handoff.directory, undefined);
+    await assert.rejects(stat(directory));
+
+    replacement = new SurfaceServer({ cwd: f.root, globalRoot: join(f.root, 'global'), host: '127.0.0.1', trusted: true,
+      state: () => ({ session: { id: 'replacement-session' }, messages: [] }), invoke: () => ({ accepted: true }),
+    }, handoff);
+    await replacement.start();
+    assert.equal(replacement.continuedOrigin, true);
+    assert.equal(replacement.port, f.server.port);
+    const state = await (await fetch(f.base + '/api/state', { headers: { cookie: f.cookie } })).json();
+    assert.equal(state.session.id, 'replacement-session');
+    assert.equal(replacement.store.list().some(item => item.id === 'temporary:old-session-report'), false);
+    assert.throws(() => replacement!.attachmentIds([uploaded.id]));
   } finally { await replacement?.close(); await f.cleanup(); }
 });
 

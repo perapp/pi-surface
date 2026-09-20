@@ -12,7 +12,8 @@ let actionRunning = false;
 let surfaceConnectionInfo = null;
 let surfaceQrVisible = false;
 let connected = false;
-let reloadExpected = false;
+let restartExpected = false;
+let restartReason = 'reload';
 let reconnectAttempts = 0;
 let reconnectTimer;
 let refreshTimer;
@@ -151,10 +152,13 @@ function queueRefresh() {
 }
 function applyState(next) {
   if (next.protocol !== 1) { closeConnection('This server uses an unsupported protocol.'); return; }
-  if (state?.session?.id && next.session?.id && next.session.id !== state.session.id) {
-    closeConnection('The terminal changed sessions.'); return;
+  const sessionChanged = !!(state?.session?.id && next.session?.id && next.session.id !== state.session.id);
+  if (sessionChanged && !restartExpected) {
+    closeConnection('The terminal changed sessions unexpectedly.'); return;
   }
+  if (sessionChanged) { uploads.splice(0); renderUploads(); }
   state = next;
+  restartExpected = false;
   state.messages ||= [];
   if (state.activeMessage && !state.messages.some((message) => message.role === state.activeMessage.role && message.timestamp != null && message.timestamp === state.activeMessage.timestamp)) state.messages.push(state.activeMessage);
   state.surfaces ||= [];
@@ -328,7 +332,7 @@ ui['surface-frame'].addEventListener('load', () => {
   } catch { /* A trusted surface may navigate elsewhere. */ }
 });
 function handleEvent(event) {
-  if (event.type === 'snapshot') { reloadExpected = false; ++refreshSequence; applyState(event.state); }
+  if (event.type === 'snapshot') { ++refreshSequence; applyState(event.state); }
   else if (event.type?.startsWith('message_')) handleMessage(event);
   else if (event.type === 'state_changed') queueRefresh();
   else if (event.type === 'surfaces_changed' && state) { state.surfaces = event.surfaces || []; renderSurfaces(); }
@@ -337,8 +341,8 @@ function handleEvent(event) {
     if (state?.surfaces.some((surface) => surface.id === activeSurface)) renderSurfaces();
     else queueRefresh();
   } else if (event.type === 'server_reloading') {
-    reloadExpected = true; connected = false;
-    connection('Reloading', 'waiting'); updateComposer();
+    restartExpected = true; restartReason = event.reason || 'reload'; connected = false;
+    connection(restartReason === 'reload' ? 'Reloading' : 'Changing session', 'waiting'); updateComposer();
   } else if (event.type === 'server_closing') closeConnection(event.reason || 'The surface server closed.');
   else if (event.type === 'surface_error') showNotice(event.message || 'The surface encountered an error.');
   else if (event.type === 'agent_start' && state) { state.session.idle = false; renderSession(); }
@@ -371,15 +375,15 @@ function connect() {
     if (stopped) return;
     connected = false;
     updateComposer();
-    connection(reloadExpected ? 'Reloading' : 'Reconnecting', 'waiting');
-    const maxAttempts = reloadExpected ? 20 : 3;
+    connection(restartExpected ? (restartReason === 'reload' ? 'Reloading' : 'Changing session') : 'Reconnecting', 'waiting');
+    const maxAttempts = restartExpected ? 20 : 3;
     if (++reconnectAttempts > maxAttempts) { closeConnection('The session server cannot be reached.'); return; }
     reconnectTimer = setTimeout(async () => {
       try { await refresh(); } catch (error) {
-        if (!stopped && !reloadExpected) showNotice(`Connection interrupted. Retrying (${reconnectAttempts}/${maxAttempts}). ${error.message}`);
+        if (!stopped && !restartExpected) showNotice(`Connection interrupted. Retrying (${reconnectAttempts}/${maxAttempts}). ${error.message}`);
       }
       if (!stopped) connect();
-    }, reloadExpected ? 1000 : reconnectAttempts * 1500);
+    }, restartExpected ? 1000 : reconnectAttempts * 1500);
   };
 }
 function updateComposer() {

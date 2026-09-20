@@ -55,7 +55,7 @@ Configuration: `~/.pi/agent/surface.json`, overridden by trusted-project `.pi/su
 
 CLI overrides: `--surface-host 127.0.0.1 --surface-port 9001`. Use `--surface-disabled` to suppress automatic startup. Hosts must be literal IP addresses; LAN discovery currently advertises IPv4 interfaces (a specifically bound IPv6 address also works). There is deliberately no unauthenticated mode.
 
-**Pi 0.85 session lifecycle:** `/new`, resume, fork, and `/reload` tear down and recreate extensions. On `/reload`, Pi Surface hands its private runtime directory, uploads, authentication, and listening address to the fresh extension instance; connected browsers briefly reconnect automatically while temporary surfaces, attachments, drafts, and the active view remain available. A real session replacement (`/new`, resume, or fork), `/surface stop`, or process exit still closes connections, rotates credentials, and deletes temporary files.
+**Pi 0.85 session lifecycle:** `/new`, resume, fork, and `/reload` tear down and recreate extensions. Pi Surface hands authentication and its listening address to the fresh extension instance, so connected browsers briefly reconnect automatically. `/reload` also preserves temporary surfaces and attachments. A real session replacement (`/new`, resume, or fork) keeps the browser draft but starts with fresh temporary surfaces and uploads; project/global surfaces remain available. `/surface stop` or process exit closes connections and rotates credentials.
 
 ## Browser controls
 

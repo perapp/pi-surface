@@ -247,13 +247,19 @@ try {
   await page.locator('#actions-controls').click();
   await page.locator('#controls-title').waitFor();
   await page.locator('#controls-close').click();
-  await page.locator('#prompt').fill('Still here after disconnect');
+  await page.locator('#prompt').fill('Still here after session replacement');
   await checkMobileLayout(browser, fixture.server.urls[0]);
-  await fixture.server.close('new');
-  await page.getByText(/new Return to the Pi terminal/).waitFor();
-  assert.equal(await page.locator('#prompt').inputValue(), 'Still here after disconnect');
+  await fixture.restartSession('new');
+  await page.waitForFunction(() => document.querySelector('#connection')?.textContent === 'Live');
+  await page.waitForFunction(() => document.querySelector('#session-name')?.textContent === 'Replacement session');
+  assert.equal(await page.locator('#prompt').inputValue(), 'Still here after session replacement');
+  assert.equal(await page.locator('#send').isDisabled(), false);
+  assert.equal(await page.locator('#favicon').getAttribute('data-status'), 'online');
+  assert.equal(await page.locator('#surface-count').textContent(), '0 surfaces');
+  await fixture.server.close('quit');
+  await page.getByText(/quit Return to the Pi terminal/).waitFor();
   assert.equal(await page.locator('#send').isDisabled(), true);
   assert.equal(await page.locator('#favicon').getAttribute('data-status'), 'offline');
   assert.deepEqual(errors, []);
-  console.log('Browser integration passed: auth, live data, same-session bridge, event patches, uploads, drafts, controls, mobile, shutdown.');
+  console.log('Browser integration passed: auth, live data, session replacement reconnect, bridge, uploads, drafts, controls, mobile, shutdown.');
 } finally { await browser.close(); await fixture.close(); }

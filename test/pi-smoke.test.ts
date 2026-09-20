@@ -7,7 +7,7 @@ import { join, resolve } from 'node:path';
 import { once } from 'node:events';
 
 // Real Pi/Jiti smoke test, no provider credentials and no inference.
-test('loads in real Pi; reload preserves the server runtime; session replacement closes it', { timeout: 30_000 }, async () => {
+test('loads in real Pi; reload preserves runtime; session replacement reconnects the same browser origin', { timeout: 30_000 }, async () => {
   const root = await mkdtemp(join(tmpdir(), 'pi-surface-real-pi-'));
   await mkdir(join(root, 'agent'));
   const child = spawn(process.execPath, [resolve('node_modules/@earendil-works/pi-coding-agent/dist/cli.js'), '--mode', 'rpc', '--no-session', '--no-skills', '-e', resolve('src/index.ts'), '--surface-host', '127.0.0.1'], {
@@ -86,13 +86,14 @@ test('loads in real Pi; reload preserves the server runtime; session replacement
 
     const sse = await fetch(base + '/api/events', { headers }); const reader = sse.body!.getReader(); await reader.read();
     assert.equal((await fetch(base + '/api/invoke', { method: 'POST', headers, body: JSON.stringify({ method: 'newSession', params: {} }) })).status, 200);
-    let sawClosing = false;
+    let sawRestarting = false;
     for (;;) {
       const chunk = await reader.read();
       if (chunk.done) break;
-      if (new TextDecoder().decode(chunk.value).includes('server_closing')) sawClosing = true;
+      const text = new TextDecoder().decode(chunk.value);
+      if (text.includes('server_reloading') && text.includes('"reason":"new"')) sawRestarting = true;
     }
-    assert.ok(sawClosing);
+    assert.ok(sawRestarting);
     // RPC state reads can run while the asynchronous replacement is still rebinding.
     let replacement = await rpc('get_state');
     for (let attempt = 0; attempt < 100 && replacement.sessionId === rpcState.sessionId; attempt++) {
@@ -100,6 +101,19 @@ test('loads in real Pi; reload preserves the server runtime; session replacement
       replacement = await rpc('get_state');
     }
     assert.notEqual(replacement.sessionId, rpcState.sessionId);
+    let replacementState: Response | undefined;
+    for (let attempt = 0; attempt < 100; attempt++) {
+      try {
+        replacementState = await fetch(base + '/api/state', { headers });
+        if (replacementState.status === 200) break;
+      } catch { /* listener is being rebound */ }
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    assert.equal(replacementState?.status, 200, 'same authenticated origin returns after /new');
+    assert.equal((await replacementState!.json()).session.id, replacement.sessionId);
+    const replacementEvents = await fetch(base + '/api/events', { headers });
+    const replacementSnapshot = new TextDecoder().decode((await replacementEvents.body!.getReader().read()).value);
+    assert.match(replacementSnapshot, new RegExp(replacement.sessionId));
     assert.ok(!events.some(event => event.type === 'extension_error'), JSON.stringify(events.filter(event => event.type === 'extension_error')));
   } finally {
     if (child.exitCode === null) { const exited = once(child, 'exit'); child.kill('SIGTERM'); await exited; }

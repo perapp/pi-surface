@@ -15,30 +15,38 @@ function text(params: Record<string, unknown>, key: string, max = 100_000): stri
 }
 const modelInfo = (model: { id: string; name: string; provider: string }) => ({ id: model.id, name: model.name, provider: model.provider });
 
-type ReloadEntry = { handoff: SurfaceServerHandoff; timer: ReturnType<typeof setTimeout> };
-const reloadHandoffsSymbol = Symbol.for('pi-surface.reload-handoffs.v1');
-function reloadHandoffs(): Map<string, ReloadEntry> {
-  const shared = globalThis as typeof globalThis & { [reloadHandoffsSymbol]?: Map<string, ReloadEntry> };
-  return shared[reloadHandoffsSymbol] ??= new Map();
+type HandoffEntry = { handoff: SurfaceServerHandoff; timer: ReturnType<typeof setTimeout> };
+const serverHandoffsSymbol = Symbol.for('pi-surface.server-handoffs.v2');
+function serverHandoffs(): Map<string, HandoffEntry> {
+  const shared = globalThis as typeof globalThis & { [serverHandoffsSymbol]?: Map<string, HandoffEntry> };
+  return shared[serverHandoffsSymbol] ??= new Map();
 }
-const reloadKey = (current: ExtensionContext) => `${current.sessionManager.getSessionId()}\0${current.cwd}`;
-function stashReload(current: ExtensionContext, handoff: SurfaceServerHandoff) {
-  const entries = reloadHandoffs();
-  const key = reloadKey(current);
+function handoffKey(reason: string, current: ExtensionContext, previousSessionFile?: string) {
+  if (reason === 'reload') return `reload\0${current.sessionManager.getSessionId()}\0${current.cwd}`;
+  const oldSessionFile = previousSessionFile ?? current.sessionManager.getSessionFile();
+  return `replacement\0${reason}\0${oldSessionFile ?? current.cwd}`;
+}
+function removeHandoffFiles(handoff: SurfaceServerHandoff) {
+  if (handoff.directory) void rm(handoff.directory, { recursive: true, force: true });
+}
+function stashHandoff(reason: string, current: ExtensionContext, handoff: SurfaceServerHandoff) {
+  const entries = serverHandoffs();
+  const key = handoffKey(reason, current);
   const previous = entries.get(key);
-  if (previous) { clearTimeout(previous.timer); void rm(previous.handoff.directory, { recursive: true, force: true }); }
+  if (previous) { clearTimeout(previous.timer); removeHandoffFiles(previous.handoff); }
   const timer = setTimeout(() => {
     if (entries.get(key)?.handoff !== handoff) return;
-    entries.delete(key); void rm(handoff.directory, { recursive: true, force: true });
+    entries.delete(key); removeHandoffFiles(handoff);
   }, 30_000);
   timer.unref();
   entries.set(key, { handoff, timer });
 }
-function takeReload(current: ExtensionContext): SurfaceServerHandoff | undefined {
-  const entries = reloadHandoffs();
-  const entry = entries.get(reloadKey(current));
+function takeHandoff(reason: string, current: ExtensionContext, previousSessionFile?: string): SurfaceServerHandoff | undefined {
+  const entries = serverHandoffs();
+  const key = handoffKey(reason, current, previousSessionFile);
+  const entry = entries.get(key);
   if (!entry) return;
-  clearTimeout(entry.timer); entries.delete(reloadKey(current));
+  clearTimeout(entry.timer); entries.delete(key);
   return entry.handoff;
 }
 
@@ -200,7 +208,7 @@ export default function surfaceExtension(pi: ExtensionAPI) {
           try { pi.sendUserMessage(`/${controlCommand} ${requestId}`, { expandPromptTemplates: true, deliverAs: 'followUp' }); }
           catch (error) { controls.delete(requestId); server?.publish({ type: 'surface_error', message: String(error) }); }
         }, 30);
-        return { accepted: true, note: method === 'reload' ? 'Reloading extensions and reconnecting this surface automatically.' : 'Session replacement rotates the URL/token; reconnect using /surface in Pi.' };
+        return { accepted: true, note: 'Reconnecting this surface automatically after the session operation.' };
       }
       default: throw new HttpError(400, `Unsupported method: ${method}`);
     }
@@ -316,16 +324,18 @@ export default function surfaceExtension(pi: ExtensionAPI) {
 
   pi.on('session_start', async (event, current) => {
     context = current; activeMessage = undefined; lastUiPrompt = undefined;
-    const handoff = event.reason === 'reload' ? takeReload(current) : undefined;
+    const handoff = ['reload', 'new', 'resume', 'fork'].includes(event.reason)
+      ? takeHandoff(event.reason, current, event.previousSessionFile)
+      : undefined;
     if (handoff || (current.mode === 'tui' && !pi.getFlag('surface-disabled'))) {
       try { await start(current, true, handoff); } catch (error) { current.ui.notify(`Pi Surface: ${String(error)}`, 'error'); }
     }
   });
   pi.on('session_shutdown', async (event, current) => {
     clearTimeout(controlTimer); controls.clear();
-    if (event.reason === 'reload' && server) {
+    if (['reload', 'new', 'resume', 'fork'].includes(event.reason) && server) {
       const previous = server; server = undefined;
-      stashReload(current, await previous.preserveForReload());
+      stashHandoff(event.reason, current, await previous.preserveForRestart(event.reason, event.reason === 'reload'));
     } else await stop(event.reason);
     context = undefined;
   });

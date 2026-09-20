@@ -23,7 +23,7 @@
   let snapshot = null;
   let source = null;
   let closed = false;
-  let reloadExpected = false;
+  let restartExpected = false;
   let reconnectAttempts = 0;
   let reconnectTimer;
   let refreshTimer;
@@ -174,11 +174,11 @@
   function handleEvent(event) {
     if (event.type === 'snapshot') {
       snapshot = event.state;
-      reloadExpected = false;
+      restartExpected = false;
       reconnectAttempts = 0;
     }
     notify(listeners, event.type, event);
-    if (event.type === 'server_reloading') { reloadExpected = true; return; }
+    if (event.type === 'server_reloading') { restartExpected = true; return; }
     if (event.type === 'server_closing') { disconnect(event.reason || 'The Pi session server closed.'); return; }
     if (event.type === 'state_changed') {
       clearTimeout(refreshTimer);
@@ -211,7 +211,7 @@
     source.onerror = () => {
       source?.close();
       if (closed) return;
-      const maxAttempts = reloadExpected ? 20 : 3;
+      const maxAttempts = restartExpected ? 20 : 3;
       if (++reconnectAttempts > maxAttempts) { disconnect('The Pi session server cannot be reached.'); return; }
       reconnectTimer = setTimeout(async () => {
         // EventSource hides HTTP status. Probe state to identify authentication errors.
@@ -219,7 +219,7 @@
           snapshot = await responseBody(await fetch('/api/state', { credentials: 'same-origin', cache: 'no-store', signal: AbortSignal.timeout(10000) }));
         } catch (error) { if (!closed) console.warn('[pi-surface] Reconnecting:', error.message); }
         if (!closed) connect();
-      }, reloadExpected ? 1000 : reconnectAttempts * 1500);
+      }, restartExpected ? 1000 : reconnectAttempts * 1500);
     };
   }
   const pi = {

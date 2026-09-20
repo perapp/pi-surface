@@ -13,13 +13,13 @@ export class HttpError extends Error {
 export interface Attachment { id: string; name: string; mimeType: string; size: number; path: string; used: boolean }
 export interface SurfaceServerHandoff {
   version: 1;
-  directory: string;
+  directory?: string;
   host: string;
   port: number;
   token: string;
   cookieName: string;
   cookies: string[];
-  attachments: Attachment[];
+  attachments?: Attachment[];
 }
 export interface ServerOptions {
   cwd: string; globalRoot: string; projectRoot?: string; trusted: boolean;
@@ -274,11 +274,11 @@ export class SurfaceServer {
     throw new HttpError(404, 'Not found');
   }
 
-  async preserveForReload(): Promise<SurfaceServerHandoff> {
+  async preserveForRestart(reason: string, preserveRuntime = reason === 'reload'): Promise<SurfaceServerHandoff> {
     if (this.closing) throw new Error('Pi Surface is already closing');
     this.closing = true;
     clearInterval(this.heartbeat);
-    this.publish({ type: 'server_reloading' });
+    this.publish({ type: 'server_reloading', reason });
     for (const client of this.clients) client.end();
     this.clients.clear();
     await this.store?.close();
@@ -286,11 +286,19 @@ export class SurfaceServer {
     await new Promise<void>(resolve => this.server.close(() => resolve()));
     await Promise.allSettled([...this.operations]);
     const handoff: SurfaceServerHandoff = {
-      version: 1, directory: this.directory, host: this.options.host ?? '0.0.0.0', port: this.port,
+      version: 1, host: this.options.host ?? '0.0.0.0', port: this.port,
       token: this.token, cookieName: this.cookieName, cookies: [...this.cookies],
-      attachments: [...this.attachments.values()].map(file => ({ ...file })),
+      ...(preserveRuntime ? {
+        directory: this.directory,
+        attachments: [...this.attachments.values()].map(file => ({ ...file })),
+      } : {}),
     };
-    this.transferred = true;
+    if (preserveRuntime) this.transferred = true;
+    else {
+      this.attachments.clear();
+      if (this.directory) await rm(this.directory, { recursive: true, force: true });
+      this.directory = '';
+    }
     return handoff;
   }
 
