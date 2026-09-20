@@ -42,6 +42,12 @@ try {
   assert.equal(await page.locator('#prompt-panel').isHidden(), true);
   const frame = page.frameLocator('#surface-frame');
   await frame.getByText('3 passed', { exact: true }).waitFor();
+  const requestIds = await frame.locator('body').evaluate(() => {
+    const requestId = (window as unknown as { surface: { requestId(): string } }).surface.requestId;
+    return [requestId(), requestId()];
+  });
+  assert.match(requestIds[0], /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  assert.notEqual(requestIds[0], requestIds[1]);
   await frame.getByRole('heading', { name: 'Reactive report' }).click();
   assert.equal(await page.locator('#surface-frame').evaluate(el => el === document.activeElement), true);
   await page.keyboard.press('Control+b');

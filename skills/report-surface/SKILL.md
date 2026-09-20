@@ -34,7 +34,7 @@ Read [`../pi-surface/SKILL.md`](../pi-surface/SKILL.md) for the core Surface lif
 - A section expansion sends `adaptive-report-expand`. Generate useful additional detail rather than restating the visible section.
 - Include the current report state in each action. Surface events are transient, and the model must have enough context to respond after compaction.
 - Use the bridge-provided `surface.id` as the canonical, scope-qualified surface ID. Never hard-code or derive the return address from the creation slug.
-- Include a unique `requestId`; ignore stale responses in the browser.
+- Include a unique `requestId` from `surface.requestId()`; ignore stale responses in the browser. Do not use `crypto.randomUUID()`, because it is unavailable on non-secure HTTP origins.
 - The action promise acknowledges queueing only. Keep a loading state until the matching emitted event arrives, with a timeout that restores controls and explains how to retry.
 - Never invoke inference on page load, rendering, reconnect, or a watched-file callback.
 - Use local disclosure for content that already exists. Invoke Pi only when the reader requests new reasoning or prose.

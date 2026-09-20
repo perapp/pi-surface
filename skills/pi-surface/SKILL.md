@@ -60,6 +60,7 @@ Project files use a `surface.json` manifest:
 ```
 
 - `surface.id` is the canonical runtime-qualified ID (`temporary:slug`, `project:slug`, or `global:slug`). Use this exact value as the return address for actions and emitted events; do not hard-code the creation slug.
+- `surface.requestId()` returns a UUID-shaped correlation ID on both secure HTTPS and plain HTTP origins. Use it instead of `crypto.randomUUID()`, which is unavailable in browsers on non-secure HTTP origins.
 - `surface.read(path)` reads a declared dependency, returning JSON for JSON files and text otherwise.
 - `surface.watch(callback)` observes all declared dependencies; `surface.watch(path, callback)` filters an exact path. Without callbacks, dependency changes reload the page. No inference is needed to refresh data.
 - `pi.prompt(text, {attachments})` submits when idle; `pi.steer(...)` steers a running agent; `pi.followUp(...)` queues until the agent finishes. Always show failures and avoid accidental repeated inference from render/watch callbacks.

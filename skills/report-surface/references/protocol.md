@@ -37,7 +37,7 @@ The visual design may add fields, but action payloads must remain self-contained
 Send only after an explicit reader action:
 
 ```js
-const requestId = crypto.randomUUID();
+const requestId = surface.requestId();
 await surface.action('adaptive-report-regenerate', 'report', {
   protocol: 'adaptive-report/v1',
   surfaceId: surface.id,
@@ -84,7 +84,7 @@ The handler must use the top-level `surfaceId` from the `Surface action:` envelo
 Send the current section and report settings, not merely its ID:
 
 ```js
-const requestId = crypto.randomUUID();
+const requestId = surface.requestId();
 await surface.action('adaptive-report-expand', section.id, {
   protocol: 'adaptive-report/v1',
   surfaceId: surface.id,
@@ -129,7 +129,7 @@ let pending = null;
 let timeoutId = null;
 
 function beginRequest(kind, target) {
-  const requestId = crypto.randomUUID();
+  const requestId = surface.requestId();
   pending = { requestId, kind, target };
   setBusy(true);
   clearTimeout(timeoutId);
